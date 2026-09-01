@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1b1f27" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='3' fill='%233b82f6'/%3E%3Crect x='4' y='7' width='8' height='5' fill='white'/%3E%3C/svg%3E" />
+    <title>Room Visualizer – WebXR Raumplaner</title>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <header id="topbar">
+      <span class="brand">Room Visualizer</span>
+      <nav class="views" aria-label="Ansicht">
+        <button data-view="perspective" class="active">3D</button>
+        <button data-view="isometric">Isometrisch</button>
+        <button data-view="top">2D</button>
+      </nav>
+      <div id="xr-buttons"></div>
+      <button id="toggle-panel" title="Seitenpanel ein-/ausblenden">☰ Menü</button>
+    </header>
+
+    <aside id="panel">
+      <section>
+        <h2>Raum</h2>
+        <div class="row3">
+          <label>Breite (cm)<input id="room-width" type="number" min="100" max="2000" step="1" /></label>
+          <label>Länge (cm)<input id="room-depth" type="number" min="100" max="2000" step="1" /></label>
+          <label>Höhe (cm)<input id="room-height" type="number" min="100" max="2000" step="1" /></label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Elemente <span class="muted">(<span id="element-count">0</span> platziert)</span></h2>
+        <div id="catalog"></div>
+      </section>
+
+      <section id="selection">
+        <h2>Auswahl</h2>
+        <p id="selection-empty" class="muted">Kein Element ausgewählt – klicke ein Element im Raum an.</p>
+        <div id="selection-form" hidden>
+          <label>Name<input id="sel-name" type="text" /></label>
+          <div class="row3">
+            <label>Breite (cm)<input id="sel-w" type="number" min="2" step="1" /></label>
+            <label>Höhe (cm)<input id="sel-h" type="number" min="2" step="1" /></label>
+            <label>Tiefe (cm)<input id="sel-d" type="number" min="2" step="1" /></label>
+          </div>
+          <div class="row3">
+            <label>X (cm)<input id="sel-x" type="number" step="1" /></label>
+            <label>Y (cm)<input id="sel-y" type="number" step="1" /></label>
+            <label>Z (cm)<input id="sel-z" type="number" step="1" /></label>
+          </div>
+          <label>Farbe<input id="sel-color" type="color" /></label>
+          <div class="row">
+            <button id="sel-rotate" title="Taste R">Drehen 90°</button>
+            <button id="sel-duplicate">Duplizieren</button>
+            <button id="sel-delete" class="danger" title="Taste Entf">Löschen</button>
+          </div>
+        </div>
+        <label class="check"><input id="edit-mode" type="checkbox" checked /> Bearbeitungsmodus (Griffe anzeigen)</label>
+      </section>
+
+      <section>
+        <h2>Projekt</h2>
+        <div class="row">
+          <button id="export">Export JSON</button>
+          <button id="import">Import JSON</button>
+          <button id="reset" class="danger">Zurücksetzen</button>
+        </div>
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+        <p class="muted small">Der Stand wird automatisch im Browser gespeichert.</p>
+      </section>
+
+      <section class="help">
+        <h2>Bedienung</h2>
+        <ul>
+          <li><b>Maus:</b> Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste / zwei Finger = Ansicht schwenken, Rad = Zoom.</li>
+          <li><b>Tastatur:</b> <kbd>R</kbd> drehen, <kbd>Entf</kbd> löschen, <kbd>E</kbd> Griffe an/aus, <kbd>Esc</kbd> abwählen.</li>
+          <li><b>Quest 3:</b> „VR starten“ bzw. „AR (Passthrough)“. Trigger = auswählen/ziehen, Griff-Taste = Menü vor dich holen.</li>
+        </ul>
+      </section>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
