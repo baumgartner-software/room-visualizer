@@ -40,10 +40,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Enable GitHub Pages (falls noch nicht aktiv)
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # Voraussetzung (einmalig): Settings → Pages → Source = "GitHub Actions"
+      - uses: actions/configure-pages@v5
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

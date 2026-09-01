@@ -68,7 +68,10 @@ Bei **jedem Push** baut die GitHub Action (`.github/workflows/deploy.yml`) das P
 veröffentlicht.
 
 Einmalig muss in den Repository-Einstellungen unter **Settings → Pages → Build and
-deployment → Source** die Option **GitHub Actions** gewählt werden.
+deployment → Source** die Option **GitHub Actions** gewählt werden
+(https://github.com/baumgartner-software/room-visualizer/settings/pages). Der Actions-Token
+darf Pages nicht selbst aktivieren; bis dahin schlägt nur der Deploy-Job fehl, der Build
+läuft. Danach den Workflow erneut starten („Re-run“) oder einfach den nächsten Push abwarten.
 
 ## Arbeitsweise / Hinweise für Agenten
 
