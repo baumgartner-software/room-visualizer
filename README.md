@@ -4,7 +4,6 @@ WebXR-Raumplaner in TypeScript (Vite + Three.js). Entwickelt für die **Meta Que
 aber genauso im Desktop-Browser nutzbar – mit umschaltbarer **3D-**, **isometrischer**
 und **2D-Grundriss-Ansicht**.
 
-
 **Live:** https://baumgartner-software.github.io/room-visualizer/
 
 ## Ziel des Projekts
