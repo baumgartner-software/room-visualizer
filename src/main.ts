@@ -6,6 +6,7 @@ import { Editor } from './editor'
 import { ElementsLayer } from './elements'
 import { bounds } from './geometry'
 import { RoomView } from './room'
+import { decodeState, encodeState, shareUrl, tokenFromLocation } from './share'
 import { Store } from './store'
 import type { ElementDef, RoomSpec } from './types'
 import { setupUI } from './ui'
@@ -39,6 +40,9 @@ fill.position.set(-5, 4, -4)
 scene.add(fill)
 
 // --- Zustand & Raum ----------------------------------------------------------
+/** `#s=…` in der Adresse hat Vorrang vor dem lokal gespeicherten Stand. */
+const initialToken = tokenFromLocation()
+let loadingSharedState = initialToken !== null
 const store = new Store(forceDefault ? defaultProject() : undefined)
 const roomGroup = new Group()
 roomGroup.name = 'room'
@@ -67,6 +71,49 @@ function roomToWorld(x: number, y: number, z: number): Vector3 {
   return new Vector3(x, y, z).add(roomGroup.position)
 }
 
+// --- Teilbare URL ------------------------------------------------------------
+const shareListeners = new Set<(url: string) => void>()
+let shareTimer: number | undefined
+let lastShareUrl = ''
+
+/**
+ * Schreibt den kompletten Zustand als komprimiertes Fragment in die Adresse.
+ * Entprellt, damit das Ziehen eines Elements nicht bei jedem Frame kodiert.
+ */
+function scheduleShareUpdate(): void {
+  window.clearTimeout(shareTimer)
+  shareTimer = window.setTimeout(async () => {
+    const url = shareUrl(await encodeState(store.state))
+    if (url === lastShareUrl) return
+    lastShareUrl = url
+    history.replaceState(null, '', url)
+    for (const listener of shareListeners) listener(url)
+  }, 200)
+}
+
+if (initialToken) {
+  void decodeState(initialToken)
+    .then((state) => {
+      if (state) store.replace(state)
+      else console.warn('Der Link enthielt keinen lesbaren Zustand.')
+    })
+    .finally(() => {
+      loadingSharedState = false
+    })
+}
+
+// Wird ein anderer Link in dieselbe Seite eingefügt, direkt übernehmen.
+window.addEventListener('hashchange', () => {
+  const token = tokenFromLocation()
+  if (!token || shareUrl(token) === lastShareUrl) return
+  void decodeState(token).then((state) => {
+    if (state) {
+      editor.select(null)
+      store.replace(state)
+    }
+  })
+})
+
 let lastRoom: RoomSpec | null = null
 store.subscribe((state) => {
   if (state.room !== lastRoom) {
@@ -76,6 +123,7 @@ store.subscribe((state) => {
   }
   layer.sync(state.elements)
   editor.updateHandles()
+  scheduleShareUpdate()
 })
 
 function placeElement(def: ElementDef, worldPoint?: Vector3): void {
@@ -114,6 +162,7 @@ setupUI({
     views.setMode(mode, store.room)
     editor.setHiddenAxes(mode === 'top' ? ['y'] : [])
   },
+  onShareUrl: (listener) => shareListeners.add(listener),
 })
 xr.createButtons(document.getElementById('xr-buttons')!)
 if (!showUI) document.body.classList.add('no-ui')
@@ -231,7 +280,7 @@ renderer.setAnimationLoop(() => {
   }
   renderer.render(scene, views.camera)
   frames += 1
-  if (frames === 3) api.ready = true
+  if (frames >= 3 && !loadingSharedState) api.ready = true
 })
 
 /** Kleine Schnittstelle für den automatischen Screenshot (siehe scripts/screenshot.mjs). */

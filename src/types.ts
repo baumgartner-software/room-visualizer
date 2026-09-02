@@ -22,10 +22,15 @@ export interface OpeningSpec {
   /** Abstand vom Startpunkt (a) der Wand. */
   start: number
   width: number
-  /** Unterkante über dem Boden (0 = Tür/Durchgang). */
+  /** Unterkante über dem Boden (0 = bodentief). */
   sill: number
   /** Oberkante über dem Boden. */
   top: number
+  /**
+   * 'window' und 'door' bekommen Rahmen und Glasscheibe, 'passage' bleibt eine
+   * leere Öffnung (z. B. der Durchgang zum Flur).
+   */
+  kind?: 'window' | 'door' | 'passage'
 }
 
 export interface WallSpec {
@@ -54,6 +59,12 @@ export interface RoomSpec {
   floorColor: string
 }
 
+/**
+ * Richtung, in die die Front eines Möbels zeigt – als lokale Achse, dreht sich
+ * also mit `rotationY` mit.
+ */
+export type FrontDir = 'px' | 'nx' | 'pz' | 'nz'
+
 /** Ein Element aus dem Katalog (Vorlage). */
 export interface ElementDef {
   id: string
@@ -64,6 +75,14 @@ export interface ElementDef {
   elevation: number
   color: string
   description?: string
+  /** Sonderform statt Quader. */
+  shape?: 'box' | 'faucet'
+  /** Blickrichtung der Front; ohne Angabe bleibt das Möbel ein glatter Quader. */
+  front?: FrontDir
+  /** Aufteilung der Front in Türen/Schubladen: [Spalten, Reihen]. */
+  frontPanels?: [number, number]
+  /** Griffform der Front. */
+  handle?: 'vertical' | 'horizontal' | 'none'
 }
 
 /**
@@ -79,6 +98,8 @@ export interface PlacedElement {
   /** Drehung um die Hochachse in Radiant (Vielfache von 90°). */
   rotationY: number
   color: string
+  /** Richtung der Front (lokale Achse); ohne Angabe glatter Quader. */
+  front?: FrontDir
 }
 
 export interface ProjectState {

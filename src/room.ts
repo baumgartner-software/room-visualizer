@@ -58,6 +58,18 @@ export class RoomView {
   })
   private height = 2.5
   private outline: import('./types').Vec2[] = []
+  private readonly glassMaterial = new MeshStandardMaterial({
+    color: new Color('#cfe0ea'),
+    side: DoubleSide,
+    transparent: true,
+    opacity: 0.3,
+    roughness: 0.05,
+    metalness: 0.1,
+  })
+  private readonly frameMaterial = new MeshStandardMaterial({
+    color: new Color('#f6f4f0'),
+    roughness: 0.6,
+  })
 
   constructor(spec: RoomSpec) {
     this.floorMaterial = new MeshStandardMaterial({
@@ -143,6 +155,40 @@ export class RoomView {
     this.ceilingMaterial.opacity = transparent ? 0.15 : 1
   }
 
+  private buildOpening(
+    o: OpeningSpec,
+    wall: WallSpec,
+    dir: { x: number; z: number },
+    n: { x: number; z: number },
+    offset: number,
+    angle: number,
+  ): Mesh[] {
+    const at = (along: number, y: number): [number, number, number] => [
+      wall.a.x + dir.x * along + n.x * offset,
+      y,
+      wall.a.z + dir.z * along + n.z * offset,
+    ]
+    const meshes: Mesh[] = []
+    for (const part of openingParts(o)) {
+      const mesh = new Mesh(
+        new BoxGeometry(part.length, part.height, wall.thickness * part.depth),
+        this.frameMaterial,
+      )
+      mesh.position.set(...at(part.along, part.y))
+      mesh.rotation.y = angle
+      meshes.push(mesh)
+    }
+    const glass = new Mesh(
+      new BoxGeometry(o.width - 0.14, o.top - o.sill - 0.14, wall.thickness * 0.18),
+      this.glassMaterial,
+    )
+    glass.position.set(...at(o.start + o.width / 2, (o.sill + o.top) / 2))
+    glass.rotation.y = angle
+    glass.raycast = () => undefined // Scheiben nicht anklickbar
+    meshes.push(glass)
+    return meshes
+  }
+
   private buildWall(wall: WallSpec, spec: RoomSpec, center: { x: number; z: number }): WallPiece | null {
     const dx = wall.b.x - wall.a.x
     const dz = wall.b.z - wall.a.z
@@ -172,6 +218,11 @@ export class RoomView {
       this.wallMeshes.push(mesh)
     }
 
+    for (const opening of wall.openings ?? []) {
+      if (opening.kind === 'passage' || opening.kind === undefined) continue
+      for (const piece of this.buildOpening(opening, wall, dir, n, offset, angle)) group.add(piece)
+    }
+
     return {
       group,
       normal: new Vector3(n.x, 0, n.z),
@@ -179,6 +230,28 @@ export class RoomView {
       exterior: !!wall.exterior,
     }
   }
+}
+
+/**
+ * Rahmen und Glasscheibe einer Öffnung. Türen bekommen zusätzlich einen
+ * Mittelpfosten, damit sie als zweiflügelige Terrassentür lesbar sind.
+ */
+function openingParts(o: OpeningSpec): { along: number; y: number; length: number; height: number; depth: number }[] {
+  const FRAME = 0.07
+  const h = o.top - o.sill
+  const midY = o.sill + h / 2
+  const parts = [
+    { along: o.start + o.width / 2, y: o.top - FRAME / 2, length: o.width, height: FRAME, depth: 0.9 },
+    { along: o.start + FRAME / 2, y: midY, length: FRAME, height: h, depth: 0.9 },
+    { along: o.start + o.width - FRAME / 2, y: midY, length: FRAME, height: h, depth: 0.9 },
+  ]
+  if (o.sill > 0.01) {
+    parts.push({ along: o.start + o.width / 2, y: o.sill + FRAME / 2, length: o.width, height: FRAME, depth: 1.1 })
+  }
+  if (o.kind === 'door') {
+    parts.push({ along: o.start + o.width / 2, y: midY, length: FRAME * 0.8, height: h, depth: 0.9 })
+  }
+  return parts
 }
 
 interface WallBox {

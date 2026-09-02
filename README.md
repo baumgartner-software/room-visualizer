@@ -41,15 +41,19 @@ z nach Süden; alle Maße in cm):
 
 | Maß | Wert |
 | --- | --- |
-| Nordwand | 681 – aufgeteilt in 76,5 Wand · 209 Fenster · 91 Wand · 209 Fenster · 95 Wand |
+| Nordwand | 681 – aufgeteilt in 76,5 Wand · 209 Glastür · 91 Wand · 209 Glastür · 95 Wand |
 | Ostwand | 682, mit Fenster 108 (89 vor der Südecke) |
 | Küche | 409 (Westwand) × 244 (Südwand) |
 | Flur | 152 breit, 273 lang, nach Süden offen (führt weiter zum Büro) |
 | Südwand Wohnbereich | 285 |
 | Wandscheibe am Flur | 43,5 diagonal |
 
+Die beiden 209 cm breiten Öffnungen der Nordwand sind **bodentiefe Glastüren zur
+Terrasse**, kein Fenster; das 108 cm breite Element der Ostwand ist ein Fenster.
+
 **Angenommen** (in der Skizze nicht bemaßt): Raumhöhe 250 cm, Wandstärken
-(außen 24, innen 12), Fensterbrüstung 95 cm und Fensteroberkante 220 cm. Der
+(außen 24, innen 12), Fensterbrüstung 95 cm, Oberkante von Fenster und
+Terrassentüren 220 cm. Der
 Bereich hinter dem Flur (Büro) ist in der Skizze abgeschnitten und daher nicht
 modelliert. Alles davon lässt sich in `src/defaultProject.ts` anpassen.
 
@@ -73,8 +77,16 @@ Kühlschrank) steht quer dazu an der **Südwand** zum Flur. An der Nordwand wär
 er nicht möglich, dort sitzt das 209 cm breite Fenster – falls der Block dort
 stehen soll, muss das Fenster anders liegen.
 
+Der Backofen sitzt im **mittleren** der drei Hochschränke.
+
 Die Kochinsel (120 × 120 cm) mit Kochfeld und Dunstabzugshaube steht frei im
-Raum, mit rund 105 cm Gang zur Zeile und zum Hochschrankblock.
+Raum, mit rund 105 cm Gang zur Zeile und zum Hochschrankblock. Kochfeld und
+Haube liegen quer zur Insel.
+
+Die Fronten sind im **Landhausstil** gehalten: pro Tür bzw. Schublade ein
+aufgesetzter Rahmen, wodurch die Fläche dazwischen eingelassen wirkt, dazu
+schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
+`front` am Element (lokale Achse, dreht sich beim Drehen mit).
 
 ## Funktionen
 
@@ -95,6 +107,10 @@ Raum, mit rund 105 cm Gang zur Zeile und zum Hochschrankblock.
 - **WebXR**: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
   Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
   Das VR-Menü hat vier Seiten: Raum · Elemente · Farbe · Auswahl.
+- **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
+  (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
+  einen Server. Im Panel gibt es ihn zum Kopieren, dazu ein Feld mit dem
+  Zustand als JSON zum Herauskopieren oder Einfügen.
 - **Persistenz** im Browser (localStorage), Export/Import als JSON.
 
 ### Bedienung
@@ -103,7 +119,7 @@ Raum, mit rund 105 cm Gang zur Zeile und zum Hochschrankblock.
 | --- | --- |
 | Maus | Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste = schwenken, Rad = Zoom. |
 | Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `P` Pinsel an/aus · `Esc` abwählen |
-| Quest 3 | „VR starten“ bzw. „AR (Passthrough)“, Trigger = auswählen/ziehen, Griff-Taste = Menü holen |
+| Quest 3 | Trigger = auswählen, ziehen, malen · Griff-Taste = Menü holen · Stick links/rechts = drehen · Stick hoch/runter = anheben/absenken · A/X = duplizieren · B/Y = löschen |
 
 ### URL-Parameter
 
@@ -113,6 +129,7 @@ Raum, mit rund 105 cm Gang zur Zeile und zum Hochschrankblock.
 | `?reset=1` | Gespeicherten Stand ignorieren, mit Grundriss + Standardküche starten |
 | `?view=kitchen\|isometric\|top` | Startansicht wählen |
 | `?cam=px,py,pz,tx,ty,tz` | Freie Kameraposition und Blickpunkt in Grundriss-Metern |
+| `#s=…` | Kompletter Zustand als komprimiertes Fragment (teilbarer Link) |
 
 ## Entwicklung
 
@@ -145,7 +162,8 @@ im Quest-Browser, `localhost` gilt als sicherer Kontext).
 | `src/editor.ts` | Auswahl, Verschieben, Griffkugeln, Farbwerkzeug – arbeitet mit Weltstrahlen und ist dadurch für Maus und XR-Controller identisch |
 | `src/views.ts` | Kameras/Steuerung für 3D, isometrisch, 2D |
 | `src/xr.ts` | WebXR-Session, Controller, Seitenmenü in VR/AR |
-| `src/ui.ts` | HTML-Seitenpanel inklusive Farbpalette |
+| `src/ui.ts` | HTML-Seitenpanel inklusive Farbpalette und Teilen-Bereich |
+| `src/share.ts` | Zustand ⇄ komprimiertes URL-Fragment |
 | `scripts/screenshot.mjs` | Headless-Rendering für die README-Bilder |
 
 Alle Maße intern in **Metern**, die Oberfläche zeigt Zentimeter. Der
@@ -190,4 +208,5 @@ Der Commit trägt `[skip ci]` und löst deshalb keinen weiteren Lauf aus.
 - Elemente an Wänden und aneinander einrasten, Kollisionsprüfung
 - Bemaßung im 2D-Grundriss, Grundriss im Editor bearbeiten
 - Esszimmer und Wohnbereich möblieren, weitere Kataloge (Bad, Schlafzimmer)
-- Realistischere Fronten (Griffe, Rahmen) und Materialien
+- Hand-Tracking und Greifen von Elementen direkt mit der Hand
+- Materialien und Texturen (Holzmaserung, Stein) statt Volltonfarben

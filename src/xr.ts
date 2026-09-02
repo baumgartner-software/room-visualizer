@@ -258,6 +258,8 @@ export class XRManager {
   private readonly tmpRay = new Ray()
   private needsMenuPlacement = false
   private isAR = false
+  /** Zeitpunkt der nächsten erlaubten Stick-Wiederholung (Dauerdrücken). */
+  private nextRepeat = 0
 
   constructor(private readonly o: XRManagerOptions) {
     o.renderer.xr.enabled = true
@@ -350,6 +352,12 @@ export class XRManager {
       const controller = renderer.xr.getController(i)
       controller.name = `controller-${i}`
       controller.add(makeRayLine())
+      controller.addEventListener('connected', (event) => {
+        controller.userData.inputSource = (event as unknown as { data: XRInputSource }).data
+      })
+      controller.addEventListener('disconnected', () => {
+        controller.userData.inputSource = null
+      })
       controller.addEventListener('selectstart', () => this.onSelectStart(controller))
       controller.addEventListener('selectend', () => this.onSelectEnd(controller))
       controller.addEventListener('squeezestart', () => (this.needsMenuPlacement = true))
@@ -404,6 +412,7 @@ export class XRManager {
     if (this.activeController) {
       this.o.editor.pointerMove(this.rayFrom(this.activeController, this.tmpRay))
     }
+    this.readGamepads()
 
     let menuHover: Mesh | null = null
     for (const controller of this.controllers) {
@@ -429,6 +438,55 @@ export class XRManager {
       if (line) line.scale.z = length
     }
     this.menu.setHover(menuHover)
+  }
+
+  /**
+   * Controller-Tasten und Sticks: schnelles Bearbeiten ohne Umweg über das Menü.
+   *   Stick links/rechts  drehen um 90°
+   *   Stick hoch/runter   Element anheben/absenken
+   *   A/X                 duplizieren
+   *   B/Y                 löschen
+   */
+  private readGamepads(): void {
+    const { editor, store } = this.o
+    const now = performance.now()
+    for (const controller of this.controllers) {
+      const pad = (controller.userData.inputSource as XRInputSource | null)?.gamepad
+      if (!pad) continue
+      const state = (controller.userData.pad ??= { x: 0, a: false, b: false }) as {
+        x: number
+        a: boolean
+        b: boolean
+      }
+
+      const stickX = pad.axes[2] ?? 0
+      const stickY = pad.axes[3] ?? 0
+      const dirX = Math.abs(stickX) > 0.7 ? Math.sign(stickX) : 0
+      if (dirX !== state.x) {
+        state.x = dirX
+        if (dirX !== 0 && editor.selectedId) {
+          // Nach links dreimal vorwärts drehen entspricht einer Drehung zurück.
+          const turns = dirX > 0 ? 1 : 3
+          for (let i = 0; i < turns; i++) store.rotateElement(editor.selectedId)
+        }
+      }
+
+      if (Math.abs(stickY) > 0.6 && editor.selectedId && now >= this.nextRepeat) {
+        editor.nudgeSelected({ y: stickY < 0 ? 0.02 : -0.02 })
+        this.nextRepeat = now + 90
+      }
+
+      const a = pad.buttons[4]?.pressed ?? false
+      if (a && !state.a && editor.selectedId) {
+        const copy = store.duplicate(editor.selectedId)
+        if (copy) editor.select(copy.id)
+      }
+      state.a = a
+
+      const b = pad.buttons[5]?.pressed ?? false
+      if (b && !state.b && editor.selectedId) store.removeElement(editor.selectedId)
+      state.b = b
+    }
   }
 
   /** Bodenpunkt ca. 1 m vor dem Headset (Weltkoordinaten). */
@@ -495,7 +553,11 @@ export class XRManager {
           },
         ],
       },
-      { id: 'items', label: 'Elemente', rows: [{ kind: 'title', text: 'Vor dir platzieren' }, ...elementRows] },
+      {
+        id: 'items',
+        label: 'Elemente',
+        rows: [{ kind: 'title', text: 'Vor dir platzieren, dann mit dem Trigger ziehen' }, ...elementRows],
+      },
       {
         id: 'paint',
         label: 'Farbe',
@@ -515,7 +577,7 @@ export class XRManager {
         id: 'selection',
         label: 'Auswahl',
         rows: [
-          { kind: 'title', text: 'Ausgewähltes Element' },
+          { kind: 'title', text: 'Stick: drehen · hoch/runter · A dupl. · B lösch.' },
           {
             kind: 'buttons',
             buttons: [
@@ -545,11 +607,33 @@ export class XRManager {
             kind: 'buttons',
             buttons: [
               {
+                id: 'duplicate',
+                label: 'Duplizieren (A)',
+                action: () => {
+                  if (!editor.selectedId) return
+                  const copy = store.duplicate(editor.selectedId)
+                  if (copy) editor.select(copy.id)
+                },
+              },
+              {
                 id: 'delete',
-                label: 'Löschen',
+                label: 'Löschen (B)',
                 action: () => editor.selectedId && store.removeElement(editor.selectedId),
               },
+            ],
+          },
+          {
+            kind: 'buttons',
+            buttons: [
               { id: 'deselect', label: 'Abwählen', action: () => editor.select(null) },
+              {
+                id: 'edit2',
+                label: 'Griffe an/aus',
+                action: () => {
+                  editor.setEditMode(!editor.editMode)
+                  this.menu.setLabel('edit', editor.editMode ? 'Griffe: an' : 'Griffe: aus')
+                },
+              },
             ],
           },
           {

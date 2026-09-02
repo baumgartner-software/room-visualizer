@@ -120,6 +120,7 @@ export class Store {
       },
       rotationY: 0,
       color: def.color,
+      front: def.front,
     }
     el.position = clampToRoom(el, this.state.room)
     this.state.elements.push(el)
@@ -143,6 +144,7 @@ export class Store {
     if (patch.rotationY !== undefined) el.rotationY = patch.rotationY
     if (patch.name !== undefined) el.name = patch.name
     if (patch.color !== undefined) el.color = patch.color
+    if (patch.front !== undefined) el.front = patch.front
     el.position = clampToRoom(el, this.state.room)
     this.emit()
   }
@@ -152,6 +154,22 @@ export class Store {
     if (!el) return
     const turns = Math.round(el.rotationY / (Math.PI / 2))
     this.updateElement(id, { rotationY: ((turns + 1) % 4) * (Math.PI / 2) })
+  }
+
+  /** Kopiert ein Element und versetzt es um seine eigene Breite. */
+  duplicate(id: string): PlacedElement | undefined {
+    const el = this.getElement(id)
+    if (!el) return undefined
+    const copy: PlacedElement = {
+      ...el,
+      id: newId(el.defId),
+      size: { ...el.size },
+      position: { ...el.position, x: el.position.x + footprint(el).w },
+    }
+    copy.position = clampToRoom(copy, this.state.room)
+    this.state.elements.push(copy)
+    this.emit()
+    return copy
   }
 
   removeElement(id: string): void {
@@ -200,6 +218,7 @@ function normalize(raw: unknown): ProjectState {
         position: { x: +e.position.x || 0, y: +e.position.y || 0, z: +e.position.z || 0 },
         rotationY: +e.rotationY || 0,
         color: e.color ?? '#9ecae1',
+        front: e.front,
       })),
   }
 }

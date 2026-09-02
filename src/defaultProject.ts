@@ -1,4 +1,4 @@
-import type { OpeningSpec, PlacedElement, ProjectState, RoomSpec, Vec2, WallSpec } from './types'
+import type { FrontDir, OpeningSpec, PlacedElement, ProjectState, RoomSpec, Vec2, WallSpec } from './types'
 
 /**
  * Grundriss und Küchen-Einrichtung als Startzustand der Anwendung.
@@ -11,12 +11,13 @@ import type { OpeningSpec, PlacedElement, ProjectState, RoomSpec, Vec2, WallSpec
  * z nach Süden.
  *
  * Aus der Skizze übernommen:
- *   Nordwand 681 (76,5 Wand · 209 Fenster · 91 Wand · 209 Fenster · 95 Wand)
+ *   Nordwand 681 (76,5 Wand · 209 Glastür · 91 Wand · 209 Glastür · 95 Wand)
  *   Ostwand  682 (Fenster 108, 89 vor der Südecke)
  *   Küche    409 (Westwand) · 244 (Südwand)
  *   Flur     152 breit · 273 lang, nach Süden offen (führt weiter zum Büro)
  *   Südwand des Wohnbereichs 285 · Wandscheibe am Flur 43,5 diagonal
- * Angenommen (nicht bemaßt): Raumhöhe 250, Wandstärken, Fenster­brüstung 95.
+ * Angenommen (nicht bemaßt): Raumhöhe 250, Wandstärken, Fenster­brüstung 95,
+ * Oberkante der Terrassentüren 220.
  */
 const cm = (v: number): number => v / 100
 const p = (x: number, z: number): Vec2 => ({ x: cm(x), z: cm(z) })
@@ -24,15 +25,27 @@ const p = (x: number, z: number): Vec2 => ({ x: cm(x), z: cm(z) })
 const ROOM_HEIGHT = 250
 const EXTERIOR_WALL = 24
 const INTERIOR_WALL = 12
-/** Brüstungshöhe: knapp über der Arbeitsplatte (91), damit beides zusammenpasst. */
+/** Brüstungshöhe des Fensters in der Ostwand. */
 const SILL = 95
 const WINDOW_TOP = 220
+/** Oberkante der bodentiefen Terrassentüren. */
+const DOOR_TOP = 220
 
 const window = (start: number, width: number): OpeningSpec => ({
   start: cm(start),
   width: cm(width),
   sill: cm(SILL),
   top: cm(WINDOW_TOP),
+  kind: 'window',
+})
+
+/** Bodentiefe Glastür zur Terrasse. */
+const terraceDoor = (start: number, width: number): OpeningSpec => ({
+  start: cm(start),
+  width: cm(width),
+  sill: 0,
+  top: cm(DOOR_TOP),
+  kind: 'door',
 })
 
 /** Nordostecke des Flurs, an der die 43,5 cm lange Wandscheibe schräg ausläuft. */
@@ -53,7 +66,8 @@ const WALLS: WallSpec[] = [
     b: p(681, 0),
     thickness: cm(EXTERIOR_WALL),
     exterior: true,
-    openings: [window(76.5, 209), window(376.5, 209)],
+    // Die beiden 209er Öffnungen sind Glastüren zur Terrasse, keine Fenster.
+    openings: [terraceDoor(76.5, 209), terraceDoor(376.5, 209)],
   },
   {
     a: p(681, 0),
@@ -110,6 +124,8 @@ interface Item {
   /** Größe in cm: Breite (x), Höhe (y), Tiefe (z). */
   size: [number, number, number]
   color: string
+  /** Richtung, in die die Front zeigt. */
+  front?: FrontDir
 }
 
 /**
@@ -143,6 +159,7 @@ const KITCHEN: Item[] = [
     at: [BASE_D / 2, 0, z] as [number, number, number],
     size: [BASE_D, BASE_H, w] as [number, number, number],
     color: KITCHEN_COLORS.front,
+    front: 'px' as FrontDir,
   })),
   {
     defId: 'worktop',
@@ -165,6 +182,13 @@ const KITCHEN: Item[] = [
     size: [40, WORKTOP_T, 50],
     color: KITCHEN_COLORS.sink,
   },
+  {
+    defId: 'faucet',
+    name: 'Wasserhahn',
+    at: [14, BASE_H + WORKTOP_T, 210],
+    size: [22, 32, 6],
+    color: KITCHEN_COLORS.black,
+  },
   // --- Über jedem Unterschrank ein Hängeschrank ---
   ...[
     { z: 30, w: 60 },
@@ -180,11 +204,12 @@ const KITCHEN: Item[] = [
     at: [WALL_UNIT_D / 2, WALL_UNIT_Y, z] as [number, number, number],
     size: [WALL_UNIT_D, WALL_UNIT_H, w] as [number, number, number],
     color: KITCHEN_COLORS.front,
+    front: 'px' as FrontDir,
   })),
   // --- Hochschrankblock quer dazu an der Südwand ---
   ...[
-    { x: 90, id: 'oven-60', name: 'Herdumbauschrank 60' },
-    { x: 150, id: 'tall-60', name: 'Hochschrank 60' },
+    { x: 90, id: 'tall-60', name: 'Hochschrank 60' },
+    { x: 150, id: 'oven-60', name: 'Herdumbauschrank 60' },
     { x: 210, id: 'fridge-60', name: 'Kühlschrank 60' },
   ].map(({ x, id, name }) => ({
     defId: id,
@@ -192,6 +217,7 @@ const KITCHEN: Item[] = [
     at: [x, 0, 409 - TALL_D / 2] as [number, number, number],
     size: [60, TALL_H, TALL_D] as [number, number, number],
     color: KITCHEN_COLORS.front,
+    front: 'nz' as FrontDir,
   })),
   ...[90, 150, 210].map((x) => ({
     defId: 'top-60',
@@ -199,11 +225,13 @@ const KITCHEN: Item[] = [
     at: [x, TALL_H, 409 - TALL_D / 2] as [number, number, number],
     size: [60, TOP_UNIT_H, TALL_D] as [number, number, number],
     color: KITCHEN_COLORS.front,
+    front: 'nz' as FrontDir,
   })),
   {
+    // Backofen sitzt im mittleren Hochschrank.
     defId: 'oven',
     name: 'Backofen',
-    at: [90, 85, 409 - TALL_D],
+    at: [150, 85, 409 - TALL_D],
     size: [56, 60, 4],
     color: KITCHEN_COLORS.black,
   },
@@ -214,6 +242,7 @@ const KITCHEN: Item[] = [
     at: [230, 0, 170],
     size: [120, BASE_H, 120],
     color: KITCHEN_COLORS.front,
+    front: 'px' as FrontDir,
   },
   {
     defId: 'island-top',
@@ -226,14 +255,14 @@ const KITCHEN: Item[] = [
     defId: 'hob',
     name: 'Kochfeld',
     at: [230, BASE_H + 2, 170],
-    size: [80, WORKTOP_T, 52],
+    size: [52, WORKTOP_T, 80],
     color: KITCHEN_COLORS.black,
   },
   {
     defId: 'hood',
     name: 'Dunstabzugshaube',
     at: [230, 155, 170],
-    size: [100, 35, 60],
+    size: [60, 35, 100],
     color: KITCHEN_COLORS.black,
   },
 ]
@@ -249,6 +278,7 @@ function toElement(item: Item): PlacedElement {
     size: { w: cm(item.size[0]), h: cm(item.size[1]), d: cm(item.size[2]) },
     rotationY: 0,
     color: item.color,
+    front: item.front,
   }
 }
 

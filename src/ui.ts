@@ -10,6 +10,8 @@ export interface UIOptions {
   catalog: ElementDef[]
   placeElement: (def: ElementDef) => void
   setView: (mode: ViewMode) => void
+  /** Meldet die aktuelle Teilen-URL (in main.ts gebündelt und entprellt). */
+  onShareUrl: (listener: (url: string) => void) => void
 }
 
 /** Farbpalette des Pinsel-Werkzeugs. */
@@ -136,14 +138,8 @@ export function setupUI(o: UIOptions): void {
   $('sel-rotate').addEventListener('click', () => editor.selectedId && store.rotateElement(editor.selectedId))
   $('sel-delete').addEventListener('click', () => editor.selectedId && store.removeElement(editor.selectedId))
   $('sel-duplicate').addEventListener('click', () => {
-    const el = editor.selected
-    if (!el) return
-    const copy = store.addFromDef(
-      { id: el.defId, name: el.name, category: '', size: el.size, elevation: el.position.y, color: el.color },
-      { x: el.position.x + el.size.w, z: el.position.z },
-    )
-    store.updateElement(copy.id, { rotationY: el.rotationY })
-    editor.select(copy.id)
+    const copy = editor.selectedId ? store.duplicate(editor.selectedId) : undefined
+    if (copy) editor.select(copy.id)
   })
 
   const editMode = $<HTMLInputElement>('edit-mode')
@@ -203,9 +199,42 @@ export function setupUI(o: UIOptions): void {
     }
   })
 
+  // --- Teilen ----------------------------------------------------------------
+  const shareInput = $<HTMLInputElement>('share-url')
+  const shareState = $<HTMLTextAreaElement>('share-state')
+  const shareBox = $('share-state-box')
+  $('share-toggle').addEventListener('click', () => {
+    shareBox.hidden = !shareBox.hidden
+    if (!shareBox.hidden) shareState.value = store.toJSON()
+  })
+  $('share-copy').addEventListener('click', async () => {
+    const button = $<HTMLButtonElement>('share-copy')
+    try {
+      await navigator.clipboard.writeText(shareInput.value)
+      button.textContent = 'Kopiert ✓'
+    } catch {
+      shareInput.select()
+      button.textContent = 'Mit Strg+C kopieren'
+    }
+    setTimeout(() => (button.textContent = 'Link kopieren'), 2000)
+  })
+  $('share-apply').addEventListener('click', () => {
+    try {
+      store.replace(JSON.parse(shareState.value) as ProjectState)
+      editor.select(null)
+    } catch (err) {
+      alert(`Zustand konnte nicht gelesen werden: ${(err as Error).message}`)
+    }
+  })
+
   // --- Store → UI ------------------------------------------------------------
   const roomInfo = $('room-info')
+  o.onShareUrl((url) => {
+    if (document.activeElement !== shareInput) shareInput.value = url
+  })
+
   store.subscribe((state) => {
+    if (!shareBox.hidden && document.activeElement !== shareState) shareState.value = store.toJSON()
     if (document.activeElement !== roomHeight) roomHeight.value = cm(state.room.height)
     const b = bounds(state.room)
     roomInfo.textContent = `${state.room.name} · ${cm(b.width)} × ${cm(b.depth)} cm`

@@ -84,6 +84,28 @@
       </section>
 
       <section>
+        <h2>Teilen</h2>
+        <label
+          >Link zum aktuellen Stand
+          <input id="share-url" type="text" readonly />
+        </label>
+        <div class="row">
+          <button id="share-copy">Link kopieren</button>
+          <button id="share-toggle">Zustand anzeigen</button>
+        </div>
+        <div id="share-state-box" hidden>
+          <label
+            >Zustand (JSON) – hier lässt sich auch ein Stand einfügen
+            <textarea id="share-state" rows="8" spellcheck="false"></textarea>
+          </label>
+          <button id="share-apply">Eingefügten Zustand übernehmen</button>
+        </div>
+        <p class="muted small">
+          Die Adresszeile enthält immer den kompletten Stand – kopieren genügt, um ihn weiterzugeben.
+        </p>
+      </section>
+
+      <section>
         <h2>Projekt</h2>
         <div class="row">
           <button id="export">Export JSON</button>
