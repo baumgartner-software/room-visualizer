@@ -138,9 +138,11 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   **Palette am linken Controller**: mit dem rechten hineinzeigen, mit dessen
   Stick ↑↓ blättern, mit dem Trigger wählen. Zeigt der Controller nicht auf die
   Palette, bewegt und dreht derselbe Stick wieder wie im Werkzeug *Ansicht*.
+  Palette und Menü teilen sich den Platz über der Hand – ist das Menü offen,
+  tritt die Palette so lange zurück.
 - **Ansichten**: 3D (Orbit), isometrisch, 2D-Grundriss – jederzeit umschaltbar.
 - **WebXR**: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
-  Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
+  Controller-Trigger = auswählen/ziehen/malen.
   Das VR-Menü hat vier Seiten: Raum · Elemente · Farbe · Auswahl.
 - **Steuerungs-Hilfe**: unten rechts im Fenster liegt eine ausklappbare Karte mit
   beiden Quest-3-Controllern und der Belegung je Werkzeug, dazu die Maus- und
@@ -149,12 +151,20 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   das VR-Menü (*Raum → Steuerung zeigen*). Sie steht mittig im Blickfeld, hat
   oben rechts einen Schließen-Knopf, und solange sie offen ist, greift der
   Trigger nicht in die Szene – man kann also nichts versehentlich verstellen.
-- **In XR immer sichtbar** ist nur eine kleine Leiste unten rechts mit *☰ Menü*
-  dem aktiven Werkzeug, *Griffe zeigen* und *✕ Auswahl*; sie liegt über allen
-  anderen Elementen. Das Menü selbst ist zu Beginn zu und wird über diese Leiste
-  oder einen Druck auf den linken Stick auf- und zugeklappt, ein *✕* in seiner
-  Reiterzeile schließt es ebenfalls.
-  Leiste, Menü und Tafel folgen dem Kopf, bleiben also beim Gehen erreichbar.
+- **Menü an der linken Hand**: Das VR-Menü hängt am linken Controller, nicht mehr
+  vor dem Gesicht – die Hand senken schiebt es aus dem Blickfeld, die Hand heben
+  holt es zurück. Direkt über dem Controller sitzt eine **Griffleiste**: Ist das
+  Menü zu, zeigt sie *☰ Menü öffnen* und darunter, was darin steckt
+  (*Raum · Elemente · Farbe · Auswahl*); ist es offen, schließt sie es wieder.
+  Auf- und zuklappen geht ebenso über die Leiste unten rechts, einen Druck auf
+  den linken Stick oder das *✕* in der Reiterzeile.
+- **Im Menü scrollen**: Der Inhalt läuft in einem festen Ausschnitt; ein schmaler
+  Balken rechts zeigt die Position. Mit dem rechten Controller auf das Menü
+  zeigen und dessen Stick ↑↓ bewegen scrollt darin – solange der Strahl auf dem
+  Menü liegt, verstellt derselbe Stick weder die Augenhöhe noch die Auswahl.
+- **In XR immer sichtbar** ist außerdem eine kleine Leiste unten rechts mit
+  *☰ Menü*, dem aktiven Werkzeug, *Griffe zeigen* und *✕ Auswahl*; sie liegt über
+  allen anderen Elementen und folgt – wie die Steuerungs-Tafel – dem Kopf.
 - **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
   (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
   einen Server. Im Panel gibt es ihn zum Kopieren, dazu ein Feld mit dem
@@ -167,7 +177,7 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | --- | --- |
 | Maus | Klick = auswählen · <kbd>Umschalt</kbd>+Klick = weitere hinzunehmen · Griffe ziehen = bewegen und aufziehen · rechte Taste = schwenken |
 | Tastatur | `E` Griffe zeigen / zurück zur Auswahl · `R` drehen · `Entf` löschen · `V` Ansicht · `P` Farbe · `M` Messen · `Esc` zurück zu *Bearbeiten* |
-| Quest 3 · immer | Trigger = Objekte auswählen · linken Stick drücken = Menü auf/zu · Leiste unten rechts = Menü · Werkzeug · Griffe zeigen · Auswahl aufheben |
+| Quest 3 · immer | Trigger = Objekte auswählen · Griffleiste an der linken Hand oder linken Stick drücken = Menü auf/zu · auf das Menü zeigen und rechter Stick ↑↓ = darin scrollen · Leiste unten rechts = Menü · Werkzeug · Griffe zeigen · Auswahl aufheben |
 | Quest 3 · Bearbeiten, Auswahl-Schritt | Sticks bewegen dich wie im Werkzeug *Ansicht* · A/X = duplizieren · B/Y = löschen |
 | Quest 3 · Bearbeiten, Griff-Schritt | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) – alles auf die gesamte Auswahl |
 | Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe · A/X = zur Wurfkurve teleportieren · auf die Palette am linken Controller zeigen: ↑↓ blättert |

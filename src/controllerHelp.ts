@@ -29,12 +29,14 @@ export const MOVE_CONTROLS: ControlHint[] = [
   { key: 'R-Stick ↑ ↓', action: 'Augenhöhe ändern' },
   { key: 'A / X', action: 'Zur Wurfkurve teleportieren' },
   { key: 'Trigger', action: 'Anmalen (Werkzeug Farbe)' },
-  { key: 'Palette links', action: 'Hinzeigen, R-Stick ↑↓ blättert' },
+  { key: 'Palette links', action: 'Hinzeigen, R-Stick ↑ ↓ blättert' },
 ]
 
 export const ALWAYS_CONTROLS: ControlHint[] = [
+  { key: 'Linke Hand', action: 'Menü hängt am linken Controller' },
+  { key: 'Griffleiste', action: 'Antippen öffnet und schließt es' },
   { key: 'L-Stick drücken', action: 'Menü auf / zu' },
-  { key: 'Leiste u. rechts', action: 'Menü · Werkzeug · Auswahl' },
+  { key: 'R-Stick ↑ ↓', action: 'Im Menü scrollen (draufzeigen)' },
 ]
 
 export const DESKTOP_CONTROLS: ControlHint[] = [
@@ -76,9 +78,11 @@ export function drawControllerHelp(ctx: CanvasRenderingContext2D, title = 'Steue
   controller(ctx, 44, 104, 'Links', 'left')
   controller(ctx, 250, 104, 'Rechts', 'right')
 
+  // Zwei Spalten: rechts die beiden langen Listen untereinander, links unter
+  // den Controllern die dritte – vorher liefen sie ineinander.
   section(ctx, 'Werkzeug Bearbeiten', EDIT_CONTROLS, 500, 78)
-  section(ctx, 'Werkzeug Ansicht & Farbe', MOVE_CONTROLS, 500, 300)
-  section(ctx, 'Immer', ALWAYS_CONTROLS, 500, 506)
+  section(ctx, 'Menü & Leiste', ALWAYS_CONTROLS, 500, 392)
+  section(ctx, 'Werkzeug Ansicht & Farbe', MOVE_CONTROLS, 44, 360)
   ctx.restore()
 }
 
@@ -219,8 +223,14 @@ function section(
     ctx.fill()
     ctx.stroke()
 
+    // Lange Tastennamen wie „L-Stick drücken“ dürfen nicht aus dem Kästchen laufen.
     ctx.fillStyle = TEXT
-    ctx.font = `700 13px ${FONT}`
+    let keySize = 13
+    ctx.font = `700 ${keySize}px ${FONT}`
+    while (ctx.measureText(entry.key).width > 108 && keySize > 9) {
+      keySize -= 0.5
+      ctx.font = `700 ${keySize}px ${FONT}`
+    }
     ctx.textAlign = 'center'
     ctx.fillText(entry.key, x + 59, rowY + 2)
 
