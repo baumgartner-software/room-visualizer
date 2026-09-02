@@ -107,6 +107,12 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 - **WebXR**: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
   Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
   Das VR-Menü hat vier Seiten: Raum · Elemente · Farbe · Auswahl.
+- **Steuerungs-Hilfe**: unten rechts im Fenster liegt eine ausklappbare Karte mit
+  einer Abbildung des Quest-3-Controllers und der Belegung von Trigger, Griff,
+  Stick und Tasten, dazu die Maus- und Tastaturbefehle. Da HTML in einer
+  laufenden Immersive-Sitzung nicht sichtbar ist, erscheint dieselbe Grafik dort
+  als Tafel unten rechts im Blickfeld (über das VR-Menü unter *Raum*
+  abschaltbar).
 - **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
   (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
   einen Server. Im Panel gibt es ihn zum Kopieren, dazu ein Feld mit dem
@@ -164,6 +170,7 @@ im Quest-Browser, `localhost` gilt als sicherer Kontext).
 | `src/xr.ts` | WebXR-Session, Controller, Seitenmenü in VR/AR |
 | `src/ui.ts` | HTML-Seitenpanel inklusive Farbpalette und Teilen-Bereich |
 | `src/share.ts` | Zustand ⇄ komprimiertes URL-Fragment |
+| `src/controllerHelp.ts` | Controller-Legende als SVG – im Panel und als XR-Tafel |
 | `scripts/screenshot.mjs` | Headless-Rendering für die README-Bilder |
 
 Alle Maße intern in **Metern**, die Oberfläche zeigt Zentimeter. Der

@@ -334,3 +334,89 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
+
+/* --- Steuerungs-Hilfe unten rechts ---------------------------------------- */
+#help {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 11;
+  width: min(390px, calc(100vw - 24px));
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+#help-toggle {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+#help-toggle::after {
+  content: ' ▾';
+  color: var(--muted);
+}
+
+#help.collapsed #help-toggle::after {
+  content: ' ▴';
+}
+
+#help.collapsed #help-body {
+  display: none;
+}
+
+#help-body {
+  padding: 0 12px 10px;
+}
+
+#help-figure svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+}
+
+#help h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 10px 0 6px;
+}
+
+#help dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+#help dt {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#help dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+body.no-ui #help {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  #help {
+    bottom: auto;
+    top: 52px;
+  }
+}

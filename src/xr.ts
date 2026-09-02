@@ -1,6 +1,7 @@
 import {
   BufferGeometry,
   CanvasTexture,
+  Quaternion,
   Color,
   Float32BufferAttribute,
   Group,
@@ -18,6 +19,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'
+import { controllerHelpDataUrl, HELP_ASPECT } from './controllerHelp'
 import type { Editor } from './editor'
 import type { RoomView } from './room'
 import type { Store } from './store'
@@ -233,6 +235,72 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
+/**
+ * Tafel mit der Steuerungs-Legende, die während der XR-Sitzung unten rechts im
+ * Blickfeld mitläuft. HTML ist in einer laufenden Immersive-Session nicht
+ * sichtbar, deshalb wird dieselbe Grafik hier als Textur gezeigt.
+ */
+class XRHelpPanel {
+  readonly mesh: Mesh
+  private readonly targetPosition = new Vector3()
+  private readonly targetQuaternion = new Quaternion()
+  private readonly offset = new Vector3(0.19, -0.15, -0.62)
+  private placed = false
+
+  constructor() {
+    const width = 0.26
+    const canvas = document.createElement('canvas')
+    canvas.width = 1400
+    canvas.height = Math.round(1400 / HELP_ASPECT)
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#111823'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    const texture = new CanvasTexture(canvas)
+    texture.colorSpace = SRGBColorSpace
+    texture.anisotropy = 8
+    const image = new Image()
+    image.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+      texture.needsUpdate = true
+    }
+    image.src = controllerHelpDataUrl()
+
+    this.mesh = new Mesh(
+      new PlaneGeometry(width, width / HELP_ASPECT),
+      new MeshBasicMaterial({ map: texture, transparent: true, depthTest: false }),
+    )
+    this.mesh.name = 'xr-help'
+    this.mesh.renderOrder = 999
+    this.mesh.raycast = () => undefined
+    this.mesh.visible = false
+  }
+
+  get visible(): boolean {
+    return this.mesh.visible
+  }
+
+  setVisible(visible: boolean): void {
+    this.mesh.visible = visible
+    if (!visible) this.placed = false
+  }
+
+  /** Läuft dem Kopf weich hinterher, damit die Tafel nicht am Blick klebt. */
+  update(cameraPosition: Vector3, cameraQuaternion: Quaternion): void {
+    if (!this.mesh.visible) return
+    this.targetPosition.copy(this.offset).applyQuaternion(cameraQuaternion).add(cameraPosition)
+    this.targetQuaternion.copy(cameraQuaternion)
+    if (!this.placed) {
+      this.mesh.position.copy(this.targetPosition)
+      this.mesh.quaternion.copy(this.targetQuaternion)
+      this.placed = true
+      return
+    }
+    this.mesh.position.lerp(this.targetPosition, 0.18)
+    this.mesh.quaternion.slerp(this.targetQuaternion, 0.18)
+  }
+}
+
 export interface XRManagerOptions {
   renderer: WebGLRenderer
   scene: Scene
@@ -251,6 +319,7 @@ export interface XRManagerOptions {
  */
 export class XRManager {
   readonly menu: XRMenu
+  private readonly help = new XRHelpPanel()
   private readonly controllers: Group[] = []
   private activeController: Group | null = null
   private readonly raycaster = new Raycaster()
@@ -265,7 +334,7 @@ export class XRManager {
     o.renderer.xr.enabled = true
     o.renderer.xr.setReferenceSpaceType('local-floor')
     this.menu = new XRMenu(this.buildMenu())
-    o.scene.add(this.menu.group)
+    o.scene.add(this.menu.group, this.help.mesh)
     this.setupControllers()
   }
 
@@ -334,11 +403,14 @@ export class XRManager {
     this.o.roomView.setTransparent(transparent)
     this.o.editor.setHandleRadius(0.025)
     this.needsMenuPlacement = true
+    this.help.setVisible(true)
+    this.menu.setLabel('help', 'Hilfe: an')
     this.o.onSessionChange?.(true)
   }
 
   private onSessionEnd(): void {
     this.o.roomView.setTransparent(false)
+    this.help.setVisible(false)
     this.menu.hide()
     this.activeController = null
     this.o.editor.pointerUp()
@@ -400,6 +472,7 @@ export class XRManager {
   update(): void {
     if (!this.isPresenting) return
     const xrCamera = this.o.renderer.xr.getCamera()
+    this.help.update(xrCamera.getWorldPosition(new Vector3()), xrCamera.getWorldQuaternion(new Quaternion()))
     if (this.needsMenuPlacement) {
       const pos = xrCamera.getWorldPosition(new Vector3())
       const fwd = xrCamera.getWorldDirection(new Vector3())
@@ -549,6 +622,20 @@ export class XRManager {
             buttons: [
               { id: 'plan', label: 'Grundriss laden', action: () => store.setRoom(store.state.room) },
               { id: 'rect', label: 'Rechteck 4×3 m', action: () => store.setRectangularRoom(4, 3) },
+            ],
+          },
+          {
+            kind: 'buttons',
+            buttons: [
+              {
+                id: 'help',
+                label: 'Hilfe: an',
+                action: () => {
+                  this.help.setVisible(!this.help.visible)
+                  this.menu.setLabel('help', this.help.visible ? 'Hilfe: an' : 'Hilfe: aus')
+                },
+              },
+              { id: 'exit-room', label: 'XR beenden', action: () => void this.o.renderer.xr.getSession()?.end() },
             ],
           },
         ],

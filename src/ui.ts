@@ -1,3 +1,4 @@
+import { controllerHelpSvg, DESKTOP_CONTROLS } from './controllerHelp'
 import type { Editor } from './editor'
 import { bounds } from './geometry'
 import type { Store } from './store'
@@ -45,6 +46,36 @@ export function setupUI(o: UIOptions): void {
 
   const panel = $('panel')
   $('toggle-panel').addEventListener('click', () => panel.classList.toggle('collapsed'))
+
+  // --- Steuerungs-Hilfe ------------------------------------------------------
+  $('help-figure').innerHTML = controllerHelpSvg()
+  const desktopList = $('help-desktop')
+  for (const hint of DESKTOP_CONTROLS) {
+    const dt = document.createElement('dt')
+    dt.textContent = hint.key
+    const dd = document.createElement('dd')
+    dd.textContent = hint.action
+    desktopList.append(dt, dd)
+  }
+  const help = $('help')
+  const helpToggle = $<HTMLButtonElement>('help-toggle')
+  const setHelpOpen = (open: boolean): void => {
+    help.classList.toggle('collapsed', !open)
+    helpToggle.setAttribute('aria-expanded', String(open))
+    try {
+      localStorage.setItem('room-visualizer:help-open', open ? '1' : '0')
+    } catch {
+      /* Speicher nicht verfügbar – Zustand gilt nur für diese Sitzung */
+    }
+  }
+  let helpOpen = true
+  try {
+    helpOpen = localStorage.getItem('room-visualizer:help-open') !== '0'
+  } catch {
+    /* Standard: offen */
+  }
+  setHelpOpen(helpOpen)
+  helpToggle.addEventListener('click', () => setHelpOpen(help.classList.contains('collapsed')))
 
   // --- Ansichten -------------------------------------------------------------
   const viewButtons = [...document.querySelectorAll<HTMLButtonElement>('button[data-view]')]
