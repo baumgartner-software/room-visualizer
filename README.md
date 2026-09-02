@@ -101,10 +101,16 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 - **Werkzeuge**: *Ansicht* (nur umsehen und in XR umhergehen), *Bearbeiten*
   (Objekte auswählen und ändern) und *Farbe* (Pinsel). Das aktive Werkzeug steht
   in der Kopfzeile und in XR auf der Leiste unten rechts.
-- **Griffe am ausgewählten Element**: sechs Kugeln ziehen die jeweilige Seite
-  auf (rot = X, grün = Y, blau = Z), die Pfeile daneben verschieben entlang
-  genau einer Achse, die weiße Platte darüber verschiebt frei in der Ebene.
-  Dazu drehen, duplizieren, löschen.
+- **Zwei Schritte im Werkzeug *Bearbeiten***: erst **auswählen** – ein Klick bzw.
+  Trigger sammelt Objekte ein (am Desktop mit <kbd>Umschalt</kbd> mehrere, in XR
+  jeder Trigger-Druck) –, dann über *Griffe anzeigen* in den **Griff-Schritt**
+  wechseln. Objekte lassen sich bewusst **nicht** direkt anfassen und wegziehen;
+  bewegt wird nur über die Griffe. Im Griff-Schritt reagieren ausschließlich die
+  Griffe, der Strahl geht durch alle anderen Objekte hindurch.
+- **Griffe**: die Pfeile verschieben entlang genau einer Achse, die weiße Platte
+  darüber frei in der Ebene – beides wirkt auf die **gesamte Auswahl**. Die sechs
+  Kugeln ziehen die jeweilige Seite auf (rot = X, grün = Y, blau = Z) und
+  erscheinen nur, wenn genau ein Objekt ausgewählt ist.
 - **Hover-Rahmen**: Das Objekt unter dem Mauszeiger bzw. dem Controller-Strahl
   bekommt einen gelben Rahmen – auch Wände und Boden im Werkzeug *Farbe*.
 - **Umgebung**: Rasenfläche und Himmelskuppel rund um das Haus, sichtbar durch
@@ -124,9 +130,10 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   oben rechts einen Schließen-Knopf, und solange sie offen ist, greift der
   Trigger nicht in die Szene – man kann also nichts versehentlich verstellen.
 - **In XR immer sichtbar** ist nur eine kleine Leiste unten rechts mit *☰ Menü*
-  und dem aktiven Werkzeug; sie liegt über allen anderen Elementen. Das Menü
-  selbst ist zu Beginn zu und wird über diese Leiste oder die Griff-Taste
-  auf- und zugeklappt, ein *✕* in seiner Reiterzeile schließt es ebenfalls.
+  dem aktiven Werkzeug, *Griffe zeigen* und *✕ Auswahl*; sie liegt über allen
+  anderen Elementen. Das Menü selbst ist zu Beginn zu und wird über diese Leiste
+  oder einen Druck auf den linken Stick auf- und zugeklappt, ein *✕* in seiner
+  Reiterzeile schließt es ebenfalls.
   Leiste, Menü und Tafel folgen dem Kopf, bleiben also beim Gehen erreichbar.
 - **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
   (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
@@ -138,10 +145,10 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 
 | | |
 | --- | --- |
-| Maus | Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste = schwenken, Rad = Zoom. |
-| Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
-| Quest 3 · immer | Trigger = auswählen und ziehen · Griff = Menü auf/zu · Leiste unten rechts = Menü und Werkzeug |
-| Quest 3 · Bearbeiten | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen |
+| Maus | Klick = auswählen · <kbd>Umschalt</kbd>+Klick = weitere hinzunehmen · Griffe ziehen = bewegen und aufziehen · rechte Taste = schwenken |
+| Tastatur | `E` Griffe zeigen / zurück zur Auswahl · `R` drehen · `Entf` löschen · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
+| Quest 3 · immer | Trigger = Objekte auswählen · linken Stick drücken = Menü auf/zu · Leiste unten rechts = Menü · Werkzeug · Griffe zeigen · Auswahl aufheben |
+| Quest 3 · Bearbeiten | Im Griff-Schritt: linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen – alles auf die gesamte Auswahl |
 | Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe |
 
 ### URL-Parameter

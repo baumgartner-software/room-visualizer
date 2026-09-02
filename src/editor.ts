@@ -20,7 +20,7 @@ import {
 import type { ElementsLayer } from './elements'
 import type { RoomView } from './room'
 import { MIN_ELEMENT_SIZE, snap, type Store } from './store'
-import type { Axis, PlacedElement } from './types'
+import type { Axis, PlacedElement, Size, Vec3 } from './types'
 
 /**
  * Werkzeuge der Anwendung. Das gewählte Werkzeug entscheidet, was ein Klick
@@ -33,6 +33,14 @@ export const TOOL_LABELS: Record<Tool, string> = {
   edit: 'Bearbeiten',
   paint: 'Farbe',
 }
+
+/**
+ * Zwei Schritte innerhalb des Werkzeugs „Bearbeiten“:
+ *   'select'    Objekte anklicken und zur Auswahl hinzufügen – nichts bewegt sich
+ *   'transform' Griffe erscheinen; nur noch die Griffe reagieren, der Strahl
+ *               geht durch alle anderen Objekte hindurch
+ */
+export type EditPhase = 'select' | 'transform'
 
 type HandleKind = 'resize' | 'move-axis' | 'move-free'
 
@@ -50,21 +58,26 @@ const HEAD_GEOMETRY = new ConeGeometry(1, 1, 14)
 const PAD_GEOMETRY = new BoxGeometry(1, 1, 1)
 const OUTLINE_GEOMETRY = new EdgesGeometry(new BoxGeometry(1, 1, 1))
 
+interface Box {
+  min: Vector3
+  max: Vector3
+}
+
 interface AxisDrag {
   kind: 'resize' | 'move-axis'
   info: HandleInfo
   axisDir: Vector3
   lineOrigin: Vector3
   t0: number
-  size0: PlacedElement['size']
-  pos0: PlacedElement['position']
+  size0: Size
+  starts: Map<string, Vec3>
 }
 
 interface PlaneDrag {
   kind: 'move'
   plane: Plane
   startHit: Vector3
-  pos0: PlacedElement['position']
+  starts: Map<string, Vec3>
 }
 
 export type HoverKind = 'handle' | 'element' | 'paint' | null
@@ -74,26 +87,26 @@ export type HoverKind = 'handle' | 'element' | 'paint' | null
  * mit Weltstrahlen (`Ray`), sodass Maus, Touch und XR-Controller identisch
  * behandelt werden.
  *
- * Griffe am ausgewählten Element:
- *   Kugeln  – Größe der jeweiligen Seite ziehen
+ * Objekte lassen sich bewusst nicht direkt anfassen und wegziehen – erst
+ * auswählen, dann über die Griffe bewegen:
+ *   Kugeln  – Größe der jeweiligen Seite (nur bei genau einem Objekt)
  *   Pfeile  – entlang genau einer Achse verschieben
- *   Platte  – frei in der Ebene verschieben (wie das Ziehen am Körper)
+ *   Platte  – frei in der Ebene verschieben
  */
 export class Editor {
   readonly handles = new Group()
   /** Rahmen um das Objekt, auf das gerade gezeigt wird. */
   readonly hoverOutline: LineSegments
-  selectedId: string | null = null
-  editMode = true
+  selectedIds: string[] = []
   tool: Tool = 'edit'
+  editPhase: EditPhase = 'select'
   paintColor = '#c9a063'
-  onSelectionChange?: (id: string | null) => void
 
   private readonly toolListeners = new Set<(tool: Tool) => void>()
   private readonly colorListeners = new Set<(color: string) => void>()
-
+  private readonly selectionListeners = new Set<(ids: string[], phase: EditPhase) => void>()
   private drag: AxisDrag | PlaneDrag | null = null
-  private hovered: Mesh | null = null
+  private hovered: Object3D | null = null
   private readonly raycaster = new Raycaster()
   private handleRadius = 0.03
   private hiddenAxes = new Set<Axis>()
@@ -121,11 +134,15 @@ export class Editor {
     return this.drag !== null
   }
 
+  /** Zuletzt angeklicktes Objekt – das Panel zeigt dessen Werte. */
+  get selectedId(): string | null {
+    return this.selectedIds.at(-1) ?? null
+  }
+
   get selected(): PlacedElement | undefined {
     return this.store.getElement(this.selectedId)
   }
 
-  /** Mehrere Stellen hören mit – Panel und XR-Menü. */
   addToolListener(listener: (tool: Tool) => void): void {
     this.toolListeners.add(listener)
   }
@@ -134,10 +151,14 @@ export class Editor {
     this.colorListeners.add(listener)
   }
 
+  addSelectionListener(listener: (ids: string[], phase: EditPhase) => void): void {
+    this.selectionListeners.add(listener)
+  }
+
   setTool(tool: Tool): void {
     if (tool === this.tool) return
     this.tool = tool
-    if (tool !== 'edit') this.select(null)
+    if (tool !== 'edit') this.clearSelection()
     this.updateHandles()
     this.setHover(null)
     for (const listener of this.toolListeners) listener(tool)
@@ -149,18 +170,34 @@ export class Editor {
     for (const listener of this.colorListeners) listener(color)
   }
 
-  select(id: string | null): void {
-    if (id && !this.store.getElement(id)) id = null
-    const changed = id !== this.selectedId
-    this.selectedId = id
-    this.layer.setSelected(id)
+  setEditPhase(phase: EditPhase): void {
+    if (phase === this.editPhase) return
+    // Ohne Auswahl gibt es nichts zu bearbeiten.
+    this.editPhase = phase === 'transform' && this.selectedIds.length === 0 ? 'select' : phase
     this.updateHandles()
-    if (changed) this.onSelectionChange?.(id)
+    this.emitSelection()
   }
 
-  setEditMode(on: boolean): void {
-    this.editMode = on
-    this.updateHandles()
+  /** Ersetzt die Auswahl (null leert sie). */
+  select(id: string | null): void {
+    this.selectedIds = id && this.store.getElement(id) ? [id] : []
+    this.afterSelectionChange()
+  }
+
+  /** Fügt hinzu bzw. entfernt – für Mehrfachauswahl. */
+  toggleSelection(id: string): void {
+    if (!this.store.getElement(id)) return
+    const index = this.selectedIds.indexOf(id)
+    if (index >= 0) this.selectedIds.splice(index, 1)
+    else this.selectedIds.push(id)
+    this.afterSelectionChange()
+  }
+
+  clearSelection(): void {
+    if (this.selectedIds.length === 0 && this.editPhase === 'select') return
+    this.selectedIds = []
+    this.editPhase = 'select'
+    this.afterSelectionChange()
   }
 
   /** Griffe einzelner Achsen ausblenden (z. B. Y in der 2D-Draufsicht). */
@@ -176,32 +213,43 @@ export class Editor {
 
   /** Nach jeder Zustandsänderung aufrufen. */
   updateHandles(): void {
-    const mesh = this.layer.getMesh(this.selectedId)
-    if (!mesh || !this.editMode || this.tool !== 'edit') {
-      if (this.selectedId && !mesh) this.select(null)
+    const known = this.selectedIds.filter((id) => this.layer.getMesh(id))
+    if (known.length !== this.selectedIds.length) {
+      this.selectedIds = known
+      if (known.length === 0) this.editPhase = 'select'
+      this.emitSelection()
+    }
+    if (this.tool !== 'edit' || this.editPhase !== 'transform' || known.length === 0) {
       this.handles.visible = false
       return
     }
-    mesh.updateWorldMatrix(true, false)
+
+    const single = known.length === 1 ? this.layer.getMesh(known[0]) : undefined
+    const box = single ? null : this.selectionBox()
+    if (!single && !box) {
+      this.handles.visible = false
+      return
+    }
+    single?.updateWorldMatrix(true, false)
     this.handles.visible = true
 
-    const el = this.selected
     const r = this.handleRadius
-    const quaternion = mesh.getWorldQuaternion(new Quaternion())
+    const quaternion = single ? single.getWorldQuaternion(new Quaternion()) : new Quaternion()
 
     for (const object of this.handles.children) {
       const info = object.userData.handle as HandleInfo
-      object.visible = !this.hiddenAxes.has(info.axis)
+      // Größe lässt sich nur für ein einzelnes Objekt sinnvoll ziehen.
+      object.visible = !this.hiddenAxes.has(info.axis) && (info.kind !== 'resize' || !!single)
       if (!object.visible) continue
 
       if (info.kind === 'move-free') {
-        const top = mesh.localToWorld(new Vector3(0, 1, 0))
+        const top = single ? single.localToWorld(new Vector3(0, 1, 0)) : new Vector3(center(box!).x, box!.max.y, center(box!).z)
         object.position.copy(top).addScaledVector(new Vector3(0, 1, 0), r * 6)
         object.scale.set(r * 2.6, r * 0.5, r * 2.6)
         continue
       }
 
-      const faceCenter = mesh.localToWorld(faceLocal(info))
+      const faceCenter = single ? single.localToWorld(faceLocal(info)) : boxFaceCenter(box!, info)
       const dir = axisVector(info).applyQuaternion(quaternion).normalize()
 
       if (info.kind === 'resize') {
@@ -209,7 +257,6 @@ export class Editor {
         object.scale.setScalar(r)
         continue
       }
-      // Pfeil: Schaft ab der Fläche, Spitze am Ende.
       const shaft = object.children[0]
       const head = object.children[1]
       object.position.copy(faceCenter).addScaledVector(dir, r * 2.2)
@@ -218,41 +265,32 @@ export class Editor {
       shaft.position.set(0, r * 1.7, 0)
       head.scale.set(r * 0.85, r * 2, r * 0.85)
       head.position.set(0, r * 4.4, 0)
-      void el
     }
   }
 
-  /** @returns true, wenn der Strahl etwas getroffen hat (Klick verbraucht). */
-  pointerDown(ray: Ray): boolean {
+  /**
+   * @param additive Auswahl erweitern statt ersetzen (Umschalttaste, XR-Trigger).
+   * @returns true, wenn der Strahl etwas getroffen hat (Klick verbraucht).
+   */
+  pointerDown(ray: Ray, additive = false): boolean {
     if (this.tool === 'view') return false
-    if (this.tool === 'paint') return this.paint(ray)
-
     this.raycaster.ray.copy(ray)
-    const mesh = this.layer.getMesh(this.selectedId)
+    if (this.tool === 'paint') return this.paint()
 
-    if (this.editMode && mesh && this.handles.visible) {
+    if (this.editPhase === 'transform') {
+      // Nur die Griffe reagieren – der Strahl geht durch alles andere hindurch.
       const hit = this.raycaster.intersectObjects(this.activeHandles, true)[0]
-      if (hit && this.startHandleDrag(hit.object, mesh)) return true
+      return hit ? this.startHandleDrag(hit.object) : false
     }
 
     const elHit = this.raycaster.intersectObjects(this.layer.pickables, false)[0]
     if (elHit) {
       const id = elHit.object.userData.elementId as string
-      this.select(id)
-      const el = this.store.getElement(id)
-      const target = this.layer.getMesh(id)
-      if (el && target) {
-        const bottomY = target.getWorldPosition(new Vector3()).y
-        const plane = new Plane(new Vector3(0, 1, 0), -bottomY)
-        const startHit = new Vector3()
-        if (ray.intersectPlane(plane, startHit)) {
-          this.drag = { kind: 'move', plane, startHit, pos0: { ...el.position } }
-        }
-      }
+      if (additive) this.toggleSelection(id)
+      else this.select(id)
       return true
     }
-
-    this.select(null)
+    if (!additive) this.clearSelection()
     return false
   }
 
@@ -261,13 +299,8 @@ export class Editor {
       this.hover(ray)
       return
     }
-    const el = this.selected
-    if (!el) {
-      this.drag = null
-      return
-    }
-    if (this.drag.kind === 'move') this.moveOnPlane(ray, this.drag, el)
-    else this.dragAlongAxis(ray, this.drag, el)
+    if (this.drag.kind === 'move') this.moveOnPlane(ray, this.drag)
+    else this.dragAlongAxis(ray, this.drag)
   }
 
   pointerUp(): void {
@@ -292,45 +325,76 @@ export class Editor {
       return hit ? 'paint' : null
     }
 
-    if (this.handles.visible) {
+    if (this.editPhase === 'transform') {
       const hit = this.raycaster.intersectObjects(this.activeHandles, true)[0]
-      if (hit) {
-        this.setHover(hit.object as Mesh)
-        this.outline(undefined)
-        return 'handle'
-      }
+      this.setHover(hit ? hit.object : null)
+      this.hoverOutline.visible = false
+      return hit ? 'handle' : null
     }
+
     this.setHover(null)
     const elementHit = this.raycaster.intersectObjects(this.layer.pickables, false)[0]
     this.outline(elementHit?.object)
     return elementHit ? 'element' : null
   }
 
-  /** Verschiebt das ausgewählte Element in Weltkoordinaten. */
+  /** Verschiebt die gesamte Auswahl in Weltkoordinaten. */
   nudgeSelected(delta: { x?: number; y?: number; z?: number }): void {
-    const el = this.selected
-    if (!el) return
-    this.store.updateElement(el.id, {
-      position: {
-        x: el.position.x + (delta.x ?? 0),
-        y: el.position.y + (delta.y ?? 0),
-        z: el.position.z + (delta.z ?? 0),
-      },
-    })
+    for (const id of this.selectedIds) {
+      const el = this.store.getElement(id)
+      if (!el) continue
+      this.store.updateElement(id, {
+        position: {
+          x: el.position.x + (delta.x ?? 0),
+          y: el.position.y + (delta.y ?? 0),
+          z: el.position.z + (delta.z ?? 0),
+        },
+      })
+    }
+  }
+
+  /** Dreht alle ausgewählten Objekte. */
+  rotateSelected(): void {
+    for (const id of this.selectedIds) this.store.rotateElement(id)
+  }
+
+  private afterSelectionChange(): void {
+    if (this.selectedIds.length === 0) this.editPhase = 'select'
+    this.layer.setSelected(this.selectedIds)
+    this.updateHandles()
+    this.emitSelection()
+  }
+
+  private emitSelection(): void {
+    for (const listener of this.selectionListeners) listener([...this.selectedIds], this.editPhase)
   }
 
   private get activeHandles(): Object3D[] {
-    return this.handles.children.filter((o) => o.visible)
+    return this.handles.visible ? this.handles.children.filter((o) => o.visible) : []
+  }
+
+  private selectionBox(): Box | null {
+    let box: Box | null = null
+    for (const id of this.selectedIds) {
+      const mesh = this.layer.getMesh(id)
+      if (!mesh) continue
+      const b = boxOf(mesh)
+      if (!box) box = b
+      else {
+        box.min.min(b.min)
+        box.max.max(b.max)
+      }
+    }
+    return box
   }
 
   private buildHandles(): void {
     const axes: Axis[] = ['x', 'y', 'z']
     for (const axis of axes) {
       for (const sign of [1, -1] as const) {
-        const info: HandleInfo = { kind: 'resize', axis, sign }
         const sphere = new Mesh(HANDLE_GEOMETRY, gizmoMaterial(AXIS_COLORS[axis]))
         sphere.renderOrder = 1000
-        sphere.userData.handle = info
+        sphere.userData.handle = { kind: 'resize', axis, sign } satisfies HandleInfo
         this.handles.add(sphere)
 
         const arrow = new Group()
@@ -358,13 +422,12 @@ export class Editor {
     }
     const box = boxOf(object)
     const size = box.max.clone().sub(box.min)
-    const center = box.max.clone().add(box.min).multiplyScalar(0.5)
-    this.hoverOutline.position.copy(center)
+    this.hoverOutline.position.copy(center(box))
     this.hoverOutline.scale.set(size.x + 0.012, size.y + 0.012, size.z + 0.012)
     this.hoverOutline.visible = true
   }
 
-  private setHover(next: Mesh | null): void {
+  private setHover(next: Object3D | null): void {
     if (next === this.hovered) return
     if (this.hovered) applyGizmoColor(this.hovered, false)
     if (next) applyGizmoColor(next, true)
@@ -372,9 +435,8 @@ export class Editor {
   }
 
   /** Färbt das getroffene Objekt ein – Element, Wand oder Boden. */
-  private paint(ray: Ray): boolean {
+  private paint(): boolean {
     const color = this.paintColor
-    this.raycaster.ray.copy(ray)
     const elHit = this.raycaster.intersectObjects(this.layer.pickables, false)[0]
     if (elHit) {
       this.store.updateElement(elHit.object.userData.elementId as string, { color })
@@ -390,57 +452,65 @@ export class Editor {
     return false
   }
 
+  private startPositions(): Map<string, Vec3> {
+    const starts = new Map<string, Vec3>()
+    for (const id of this.selectedIds) {
+      const el = this.store.getElement(id)
+      if (el) starts.set(id, { ...el.position })
+    }
+    return starts
+  }
+
   /** @returns false, wenn der Griff aus dieser Blickrichtung nicht ziehbar ist. */
-  private startHandleDrag(object: Object3D, mesh: Mesh): boolean {
-    const el = this.selected
-    if (!el) return false
+  private startHandleDrag(object: Object3D): boolean {
     const info = object.userData.handle as HandleInfo | undefined
-    if (!info) return false
+    if (!info || this.selectedIds.length === 0) return false
+    const starts = this.startPositions()
 
     if (info.kind === 'move-free') {
-      const bottomY = mesh.getWorldPosition(new Vector3()).y
-      const plane = new Plane(new Vector3(0, 1, 0), -bottomY)
+      const box = this.selectionBox()
+      if (!box) return false
+      const plane = new Plane(new Vector3(0, 1, 0), -box.min.y)
       const startHit = new Vector3()
       if (!this.raycaster.ray.intersectPlane(plane, startHit)) return false
-      this.drag = { kind: 'move', plane, startHit, pos0: { ...el.position } }
+      this.drag = { kind: 'move', plane, startHit, starts }
       return true
     }
 
-    const quaternion = mesh.getWorldQuaternion(new Quaternion())
+    const single = this.selectedIds.length === 1 ? this.layer.getMesh(this.selectedIds[0]) : undefined
+    const quaternion = single ? single.getWorldQuaternion(new Quaternion()) : new Quaternion()
     const axisDir = axisVector(info).applyQuaternion(quaternion).normalize()
     const lineOrigin = (object as Mesh).getWorldPosition(new Vector3())
     const t0 = closestParamOnLine(lineOrigin, axisDir, this.raycaster.ray)
     if (t0 === null) return false
-    this.drag = {
-      kind: info.kind,
-      info,
-      axisDir,
-      lineOrigin,
-      t0,
-      size0: { ...el.size },
-      pos0: { ...el.position },
-    }
+    const size0 = this.selected?.size ?? { w: 1, h: 1, d: 1 }
+    this.drag = { kind: info.kind, info, axisDir, lineOrigin, t0, size0: { ...size0 }, starts }
     applyGizmoColor(object, true)
     return true
   }
 
-  private dragAlongAxis(ray: Ray, drag: AxisDrag, el: PlacedElement): void {
+  private dragAlongAxis(ray: Ray, drag: AxisDrag): void {
     const t = closestParamOnLine(drag.lineOrigin, drag.axisDir, ray)
     if (t === null) return
     const delta = snap(t - drag.t0)
 
     if (drag.kind === 'move-axis') {
-      // Der Pfeil zeigt nach außen; die Richtung im Raum steckt schon in axisDir.
-      this.store.updateElement(el.id, {
-        position: {
-          x: drag.pos0.x + drag.axisDir.x * delta,
-          y: drag.pos0.y + drag.axisDir.y * delta,
-          z: drag.pos0.z + drag.axisDir.z * delta,
-        },
-      })
+      for (const [id, pos0] of drag.starts) {
+        this.store.updateElement(id, {
+          position: {
+            x: pos0.x + drag.axisDir.x * delta,
+            y: pos0.y + drag.axisDir.y * delta,
+            z: pos0.z + drag.axisDir.z * delta,
+          },
+        })
+      }
       return
     }
 
+    // Größe ziehen gibt es nur bei genau einem ausgewählten Objekt.
+    const id = this.selectedIds[0]
+    const pos0 = drag.starts.get(id)
+    if (!pos0) return
     const { axis, sign } = drag.info
     const sizeKey = axis === 'x' ? 'w' : axis === 'y' ? 'h' : 'd'
     let change = delta
@@ -450,28 +520,25 @@ export class Editor {
       change = sign * (MIN_ELEMENT_SIZE - drag.size0[sizeKey])
     }
     const size = { ...drag.size0, [sizeKey]: newSize }
-    const position = { ...drag.pos0 }
+    const position = { ...pos0 }
     if (axis === 'y') {
-      if (sign < 0) position.y = drag.pos0.y + change
+      if (sign < 0) position.y = pos0.y + change
     } else {
       // Mittelpunkt wandert um die halbe Änderung in Richtung der gezogenen Fläche.
-      position.x = drag.pos0.x + drag.axisDir.x * (change / 2)
-      position.z = drag.pos0.z + drag.axisDir.z * (change / 2)
+      position.x = pos0.x + drag.axisDir.x * (change / 2)
+      position.z = pos0.z + drag.axisDir.z * (change / 2)
     }
-    this.store.updateElement(el.id, { size, position })
+    this.store.updateElement(id, { size, position })
   }
 
-  private moveOnPlane(ray: Ray, drag: PlaneDrag, el: PlacedElement): void {
+  private moveOnPlane(ray: Ray, drag: PlaneDrag): void {
     const hit = new Vector3()
     if (!ray.intersectPlane(drag.plane, hit)) return
-    // Die Raumgruppe ist nur verschoben, nicht rotiert – Welt-Deltas gelten auch lokal.
-    this.store.updateElement(el.id, {
-      position: {
-        x: drag.pos0.x + (hit.x - drag.startHit.x),
-        y: drag.pos0.y,
-        z: drag.pos0.z + (hit.z - drag.startHit.z),
-      },
-    })
+    const dx = hit.x - drag.startHit.x
+    const dz = hit.z - drag.startHit.z
+    for (const [id, pos0] of drag.starts) {
+      this.store.updateElement(id, { position: { x: pos0.x + dx, y: pos0.y, z: pos0.z + dz } })
+    }
   }
 }
 
@@ -501,8 +568,22 @@ function faceLocal(info: HandleInfo): Vector3 {
   return local
 }
 
-function boxOf(object: Object3D): { min: Vector3; max: Vector3 } {
-  const box = { min: new Vector3(Infinity, Infinity, Infinity), max: new Vector3(-Infinity, -Infinity, -Infinity) }
+function boxFaceCenter(box: Box, info: HandleInfo): Vector3 {
+  const c = center(box)
+  const face = c.clone()
+  face[info.axis] = info.sign > 0 ? box.max[info.axis] : box.min[info.axis]
+  return face
+}
+
+function center(box: Box): Vector3 {
+  return box.max.clone().add(box.min).multiplyScalar(0.5)
+}
+
+function boxOf(object: Object3D): Box {
+  const box: Box = {
+    min: new Vector3(Infinity, Infinity, Infinity),
+    max: new Vector3(-Infinity, -Infinity, -Infinity),
+  }
   const mesh = object as Mesh
   if (!mesh.geometry) return box
   mesh.geometry.computeBoundingBox()

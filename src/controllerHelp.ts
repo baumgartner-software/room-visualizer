@@ -13,10 +13,11 @@ export interface ControlHint {
 }
 
 export const EDIT_CONTROLS: ControlHint[] = [
-  { key: 'L-Stick ↑ ↓', action: 'Höhe des Elements' },
-  { key: 'L-Stick ← →', action: 'Um 90° drehen' },
-  { key: 'R-Stick ↑ ↓', action: 'Vor / zurück schieben' },
-  { key: 'R-Stick ← →', action: 'Links / rechts schieben' },
+  { key: 'Trigger', action: 'Objekte zur Auswahl tippen' },
+  { key: 'Griffe zeigen', action: 'Knopf unten rechts' },
+  { key: 'L-Stick ↑ ↓', action: 'Auswahl höher / tiefer' },
+  { key: 'L-Stick ← →', action: 'Auswahl um 90° drehen' },
+  { key: 'R-Stick', action: 'Auswahl in der Ebene schieben' },
   { key: 'A / X', action: 'Duplizieren' },
   { key: 'B / Y', action: 'Löschen' },
 ]
@@ -29,16 +30,16 @@ export const MOVE_CONTROLS: ControlHint[] = [
 ]
 
 export const ALWAYS_CONTROLS: ControlHint[] = [
-  { key: 'Trigger', action: 'Auswählen und ziehen' },
-  { key: 'Griff', action: 'Menü vor dich holen' },
+  { key: 'L-Stick drücken', action: 'Menü auf / zu' },
+  { key: 'Leiste u. rechts', action: 'Menü · Werkzeug · Auswahl' },
 ]
 
 export const DESKTOP_CONTROLS: ControlHint[] = [
   { key: 'Klick', action: 'Element auswählen' },
-  { key: 'Ziehen', action: 'Element verschieben' },
-  { key: 'Kugeln', action: 'Größe ändern' },
-  { key: 'Pfeile', action: 'Entlang einer Achse schieben' },
-  { key: 'Rechte Taste', action: 'Ansicht schwenken' },
+  { key: 'Umschalt+Klick', action: 'Weitere hinzunehmen' },
+  { key: 'E', action: 'Griffe zeigen / Auswahl' },
+  { key: 'Kugeln', action: 'Größe ändern (ein Objekt)' },
+  { key: 'Pfeile · Platte', action: 'Auswahl verschieben' },
   { key: 'V · P', action: 'Ansicht · Farbe' },
   { key: 'R · Entf', action: 'Drehen · löschen' },
 ]
@@ -52,7 +53,7 @@ const ACCENT = '#3b82f6'
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 export const HELP_WIDTH = 1000
-export const HELP_HEIGHT = 540
+export const HELP_HEIGHT = 560
 export const HELP_ASPECT = HELP_WIDTH / HELP_HEIGHT
 
 /** Zeichnet die komplette Legende in logischen Einheiten (HELP_WIDTH × HELP_HEIGHT). */
@@ -74,7 +75,7 @@ export function drawControllerHelp(ctx: CanvasRenderingContext2D, title = 'Steue
 
   section(ctx, 'Werkzeug Bearbeiten', EDIT_CONTROLS, 500, 78)
   section(ctx, 'Werkzeug Ansicht & Farbe', MOVE_CONTROLS, 500, 300)
-  section(ctx, 'Immer', ALWAYS_CONTROLS, 500, 466)
+  section(ctx, 'Immer', ALWAYS_CONTROLS, 500, 486)
   ctx.restore()
 }
 

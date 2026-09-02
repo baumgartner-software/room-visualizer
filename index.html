@@ -64,6 +64,7 @@
       <section id="selection">
         <h2>Auswahl</h2>
         <p id="selection-empty" class="muted">Kein Element ausgewählt – klicke ein Element im Raum an.</p>
+        <p id="selection-count" class="muted small" hidden></p>
         <div id="selection-form" hidden>
           <label>Name<input id="sel-name" type="text" /></label>
           <div class="row3">
@@ -83,7 +84,14 @@
             <button id="sel-delete" class="danger" title="Taste Entf">Löschen</button>
           </div>
         </div>
-        <label class="check"><input id="edit-mode" type="checkbox" checked /> Bearbeitungsmodus (Griffe anzeigen)</label>
+        <div class="row">
+          <button id="phase-toggle">Griffe anzeigen</button>
+          <button id="sel-clear">Auswahl aufheben</button>
+        </div>
+        <p class="muted small">
+          Erst auswählen (mit <kbd>Umschalt</kbd> mehrere), dann auf <b>Griffe anzeigen</b> wechseln.
+          Objekte lassen sich bewusst nicht direkt wegziehen – dafür sind die Griffe da.
+        </p>
       </section>
 
       <section>

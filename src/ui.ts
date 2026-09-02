@@ -191,9 +191,11 @@ export function setupUI(o: UIOptions): void {
     if (copy) editor.select(copy.id)
   })
 
-  const editMode = $<HTMLInputElement>('edit-mode')
-  editMode.checked = editor.editMode
-  editMode.addEventListener('change', () => editor.setEditMode(editMode.checked))
+  const phaseToggle = $<HTMLButtonElement>('phase-toggle')
+  phaseToggle.addEventListener('click', () =>
+    editor.setEditPhase(editor.editPhase === 'transform' ? 'select' : 'transform'),
+  )
+  $('sel-clear').addEventListener('click', () => editor.clearSelection())
 
   const renderSelection = (el: PlacedElement | undefined): void => {
     selEmpty.hidden = !!el
@@ -211,7 +213,15 @@ export function setupUI(o: UIOptions): void {
     set(sel.z, cm(el.position.z))
     set(sel.color, el.color)
   }
-  editor.onSelectionChange = (id) => renderSelection(store.getElement(id))
+  const selectionCount = $('selection-count')
+  editor.addSelectionListener((ids, phase) => {
+    renderSelection(store.getElement(ids.at(-1)))
+    selectionCount.hidden = ids.length < 2
+    selectionCount.textContent = `${ids.length} Objekte ausgewählt – Griffe bewegen alle gemeinsam`
+    phaseToggle.textContent = phase === 'transform' ? 'Zurück zum Auswählen' : 'Griffe anzeigen'
+    phaseToggle.classList.toggle('active', phase === 'transform')
+    phaseToggle.disabled = ids.length === 0 && phase === 'select'
+  })
 
   // --- Projekt ---------------------------------------------------------------
   $('export').addEventListener('click', () => {

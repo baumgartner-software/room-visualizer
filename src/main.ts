@@ -218,7 +218,7 @@ canvas.addEventListener(
   'pointerdown',
   (e) => {
     if (xr.isPresenting || e.button !== 0) return
-    if (editor.pointerDown(rayFromEvent(e))) {
+    if (editor.pointerDown(rayFromEvent(e), e.shiftKey)) {
       views.controls.enabled = false
       canvas.setPointerCapture(e.pointerId)
     }
@@ -264,13 +264,12 @@ window.addEventListener('keydown', (e) => {
     else editor.select(null)
     return
   }
-  if (!editor.selectedId) return
-  if (e.key === 'Delete' || e.key === 'Backspace') store.removeElement(editor.selectedId)
-  else if (e.key === 'r' || e.key === 'R') store.rotateElement(editor.selectedId)
+  if (editor.selectedIds.length === 0) return
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    for (const id of [...editor.selectedIds]) store.removeElement(id)
+  } else if (e.key === 'r' || e.key === 'R') editor.rotateSelected()
   else if (e.key === 'e' || e.key === 'E') {
-    editor.setEditMode(!editor.editMode)
-    const box = document.getElementById('edit-mode') as HTMLInputElement | null
-    if (box) box.checked = editor.editMode
+    editor.setEditPhase(editor.editPhase === 'transform' ? 'select' : 'transform')
   }
 })
 
@@ -307,6 +306,7 @@ renderer.setAnimationLoop(() => {
 const api = {
   ready: false,
   store,
+  editor,
   views,
   focusKitchen,
   setView: (mode: ViewMode) => views.setMode(mode, store.room),

@@ -20,7 +20,7 @@ import {
 } from 'three'
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'
 import { HELP_ASPECT, renderHelpCanvas } from './controllerHelp'
-import { TOOL_LABELS, type Editor, type Tool } from './editor'
+import { TOOL_LABELS, type Editor, type EditPhase, type Tool } from './editor'
 import type { RoomView } from './room'
 import type { Store } from './store'
 import type { ElementDef } from './types'
@@ -312,12 +312,20 @@ class XRHud {
   private readonly helpClose: Mesh
   private readonly menuButton: Mesh
   private readonly toolButton: Mesh
+  private readonly phaseButton: Mesh
+  private readonly clearButton: Mesh
   private readonly targetPosition = new Vector3()
   private readonly targetQuaternion = new Quaternion()
   private placed = false
   private hovered: Mesh | null = null
 
-  constructor(onMenu: () => void, onTool: () => void, onCloseHelp: () => void) {
+  constructor(actions: {
+    onMenu: () => void
+    onTool: () => void
+    onPhase: () => void
+    onClear: () => void
+    onCloseHelp: () => void
+  }) {
     this.group.name = 'xr-hud'
     this.group.visible = false
 
@@ -335,28 +343,48 @@ class XRHud {
 
     this.helpClose = makeLabelPlane('✕ Schließen', 0.15, 0.05, '#5a2a2a', '#ffffff', 40, { depthTest: false })
     this.helpClose.position.set(helpWidth / 2 - 0.075, helpHeight / 2 + 0.04, helpZ)
-    this.helpClose.userData.button = { id: 'help-close', label: 'Schließen', action: onCloseHelp }
+    this.helpClose.userData.button = { id: 'help-close', label: 'Schließen', action: actions.onCloseHelp }
     this.helpClose.visible = false
 
     this.menuButton = makeLabelPlane('☰ Menü', 0.1, 0.036, TAB_ACTIVE_BG, '#ffffff', 40, { depthTest: false })
-    this.menuButton.position.set(0.145, -0.3, -0.72)
-    this.menuButton.userData.button = { id: 'hud-menu', label: 'Menü', action: onMenu }
+    this.menuButton.position.set(0.145, -0.262, -0.72)
+    this.menuButton.userData.button = { id: 'hud-menu', label: 'Menü', action: actions.onMenu }
 
     this.toolButton = makeLabelPlane('Bearbeiten', 0.13, 0.036, BUTTON_BG, '#ffffff', 40, { depthTest: false })
-    this.toolButton.position.set(0.27, -0.3, -0.72)
-    this.toolButton.userData.button = { id: 'hud-tool', label: 'Werkzeug', action: onTool }
+    this.toolButton.position.set(0.285, -0.262, -0.72)
+    this.toolButton.userData.button = { id: 'hud-tool', label: 'Werkzeug', action: actions.onTool }
+
+    this.phaseButton = makeLabelPlane('Griffe zeigen', 0.13, 0.036, BUTTON_BG, '#ffffff', 40, { depthTest: false })
+    this.phaseButton.position.set(0.145, -0.306, -0.72)
+    this.phaseButton.userData.button = { id: 'hud-phase', label: 'Griffe', action: actions.onPhase }
+
+    this.clearButton = makeLabelPlane('✕ Auswahl', 0.13, 0.036, '#5a2a2a', '#ffffff', 40, { depthTest: false })
+    this.clearButton.position.set(0.285, -0.306, -0.72)
+    this.clearButton.userData.button = { id: 'hud-clear', label: 'Auswahl aufheben', action: actions.onClear }
 
     // Die Leiste liegt über allem – auch über Menü und Tafel.
     this.help.renderOrder = 1500
-    this.helpClose.renderOrder = 2000
-    this.menuButton.renderOrder = 2000
-    this.toolButton.renderOrder = 2000
-    this.group.add(this.help, this.helpClose, this.menuButton, this.toolButton)
+    for (const mesh of [this.helpClose, this.menuButton, this.toolButton, this.phaseButton, this.clearButton]) {
+      mesh.renderOrder = 2000
+    }
+    this.group.add(this.help, this.helpClose, this.menuButton, this.toolButton, this.phaseButton, this.clearButton)
   }
 
   get interactive(): Mesh[] {
     if (!this.group.visible) return []
-    return this.help.visible ? [this.menuButton, this.toolButton, this.helpClose] : [this.menuButton, this.toolButton]
+    const bar = [this.menuButton, this.toolButton, this.phaseButton, this.clearButton]
+    return this.help.visible ? [...bar, this.helpClose] : bar
+  }
+
+  /** Beschriftung der Auswahl-Knöpfe an Phase und Anzahl anpassen. */
+  setSelection(count: number, phase: EditPhase): void {
+    setPlaneLabel(
+      this.phaseButton,
+      phase === 'transform' ? '◀ Auswählen' : count > 0 ? `Griffe zeigen (${count})` : 'Griffe zeigen',
+      count > 0 || phase === 'transform' ? TAB_ACTIVE_BG : BUTTON_BG,
+      40,
+    )
+    setPlaneLabel(this.clearButton, count > 0 ? `✕ Auswahl (${count})` : '✕ Auswahl', '#5a2a2a', 40)
   }
 
   get helpVisible(): boolean {
@@ -447,13 +475,16 @@ export class XRManager {
     o.renderer.xr.enabled = true
     o.renderer.xr.setReferenceSpaceType('local-floor')
     this.menu = new XRMenu(this.buildMenu())
-    this.hud = new XRHud(
-      () => this.toggleMenu(),
-      () => this.cycleTool(),
-      () => this.setHelpVisible(false),
-    )
+    this.hud = new XRHud({
+      onMenu: () => this.toggleMenu(),
+      onTool: () => this.cycleTool(),
+      onPhase: () => o.editor.setEditPhase(o.editor.editPhase === 'transform' ? 'select' : 'transform'),
+      onClear: () => o.editor.clearSelection(),
+      onCloseHelp: () => this.setHelpVisible(false),
+    })
     o.scene.add(this.menu.group, this.hud.group)
     o.editor.addToolListener((tool) => this.hud.setToolLabel(TOOL_LABELS[tool]))
+    o.editor.addSelectionListener((ids, phase) => this.hud.setSelection(ids.length, phase))
     // Auch eine im Browser-Panel gewählte Farbe wird im VR-Menü markiert.
     o.editor.addPaintColorListener((color) => this.menu.setActiveInGroup('color', `color-${color}`))
     this.menu.setActiveInGroup('color', `color-${o.editor.paintColor}`)
@@ -530,6 +561,7 @@ export class XRManager {
     this.hud.setVisible(true)
     this.hud.setHelpVisible(false)
     this.hud.setToolLabel(TOOL_LABELS[this.o.editor.tool])
+    this.hud.setSelection(this.o.editor.selectedIds.length, this.o.editor.editPhase)
     this.menu.setActiveInGroup('color', `color-${this.o.editor.paintColor}`)
     this.menu.setLabel('help', 'Steuerung zeigen')
     this.o.onSessionChange?.(true)
@@ -561,7 +593,6 @@ export class XRManager {
       })
       controller.addEventListener('selectstart', () => this.onSelectStart(controller))
       controller.addEventListener('selectend', () => this.onSelectEnd(controller))
-      controller.addEventListener('squeezestart', () => this.toggleMenu())
       player.add(controller)
       this.controllers.push(controller)
 
@@ -594,7 +625,8 @@ export class XRManager {
     // Solange die Steuerungs-Tafel offen ist, bleibt die Szene unangetastet.
     if (this.hud.helpVisible) return
     if (this.activeController) return
-    if (this.o.editor.pointerDown(ray)) this.activeController = controller
+    // In XR sammelt jeder Trigger-Druck weitere Objekte in die Auswahl.
+    if (this.o.editor.pointerDown(ray, true)) this.activeController = controller
   }
 
   private onSelectEnd(controller: Group): void {
@@ -662,6 +694,19 @@ export class XRManager {
     else this.needsMenuPlacement = true
   }
 
+  /** Kopiert die gesamte Auswahl und wählt die Kopien aus. */
+  private duplicateSelection(): void {
+    const { editor, store } = this.o
+    const copies: string[] = []
+    for (const id of [...editor.selectedIds]) {
+      const copy = store.duplicate(id)
+      if (copy) copies.push(copy.id)
+    }
+    if (copies.length === 0) return
+    editor.clearSelection()
+    for (const id of copies) editor.toggleSelection(id)
+  }
+
   private setHelpVisible(visible: boolean): void {
     this.hud.setHelpVisible(visible)
     this.menu.setLabel('help', visible ? 'Steuerung aus' : 'Steuerung zeigen')
@@ -716,10 +761,11 @@ export class XRManager {
       const pad = source?.gamepad
       if (!pad) continue
       const isLeft = source?.handedness !== 'right'
-      const state = (controller.userData.pad ??= { x: 0, a: false, b: false }) as {
+      const state = (controller.userData.pad ??= { x: 0, a: false, b: false, stick: false }) as {
         x: number
         a: boolean
         b: boolean
+        stick: boolean
       }
 
       // Achsen 2/3 sind der Stick; ältere Geräte melden ihn auf 0/1.
@@ -731,13 +777,18 @@ export class XRManager {
 
       if (editing) {
         if (isLeft) {
-          if (pushedX && dirX !== 0 && editor.selectedId) {
+          if (pushedX && dirX !== 0 && editor.selectedIds.length > 0) {
             // Nach links dreimal vorwärts drehen entspricht einer Drehung zurück.
             const turns = dirX > 0 ? 1 : 3
-            for (let i = 0; i < turns; i++) store.rotateElement(editor.selectedId)
+            for (let i = 0; i < turns; i++) editor.rotateSelected()
           }
-          if (Math.abs(stickY) > 0.25) editor.nudgeSelected({ y: -stickY * 0.35 * dt })
-        } else if (Math.abs(stickX) > 0.25 || Math.abs(stickY) > 0.25) {
+          if (Math.abs(stickY) > 0.25 && editor.editPhase === 'transform') {
+            editor.nudgeSelected({ y: -stickY * 0.35 * dt })
+          }
+        } else if (
+          editor.editPhase === 'transform' &&
+          (Math.abs(stickX) > 0.25 || Math.abs(stickY) > 0.25)
+        ) {
           const forward = new Vector3(0, 0, -1).applyQuaternion(camQuaternion)
           forward.y = 0
           if (forward.lengthSq() > 1e-6) {
@@ -763,15 +814,19 @@ export class XRManager {
         }
       }
 
+      // Stickdruck links öffnet und schließt das Menü.
+      const stickPressed = pad.buttons[3]?.pressed ?? false
+      if (stickPressed && !state.stick && isLeft) this.toggleMenu()
+      state.stick = stickPressed
+
       const a = pad.buttons[4]?.pressed ?? false
-      if (a && !state.a && editing && editor.selectedId) {
-        const copy = store.duplicate(editor.selectedId)
-        if (copy) editor.select(copy.id)
-      }
+      if (a && !state.a && editing) this.duplicateSelection()
       state.a = a
 
       const b = pad.buttons[5]?.pressed ?? false
-      if (b && !state.b && editing && editor.selectedId) store.removeElement(editor.selectedId)
+      if (b && !state.b && editing) {
+        for (const id of [...editor.selectedIds]) store.removeElement(id)
+      }
       state.b = b
     }
   }
@@ -901,17 +956,10 @@ export class XRManager {
             buttons: [
               {
                 id: 'edit',
-                label: 'Griffe: an',
-                action: () => {
-                  editor.setEditMode(!editor.editMode)
-                  this.menu.setLabel('edit', editor.editMode ? 'Griffe: an' : 'Griffe: aus')
-                },
+                label: 'Griffe zeigen',
+                action: () => editor.setEditPhase(editor.editPhase === 'transform' ? 'select' : 'transform'),
               },
-              {
-                id: 'rotate',
-                label: 'Drehen 90°',
-                action: () => editor.selectedId && store.rotateElement(editor.selectedId),
-              },
+              { id: 'rotate', label: 'Drehen 90°', action: () => editor.rotateSelected() },
             ],
           },
           {
@@ -927,31 +975,22 @@ export class XRManager {
               {
                 id: 'duplicate',
                 label: 'Duplizieren (A)',
-                action: () => {
-                  if (!editor.selectedId) return
-                  const copy = store.duplicate(editor.selectedId)
-                  if (copy) editor.select(copy.id)
-                },
+                action: () => this.duplicateSelection(),
               },
               {
                 id: 'delete',
                 label: 'Löschen (B)',
-                action: () => editor.selectedId && store.removeElement(editor.selectedId),
+                action: () => {
+                  for (const id of [...editor.selectedIds]) store.removeElement(id)
+                },
               },
             ],
           },
           {
             kind: 'buttons',
             buttons: [
-              { id: 'deselect', label: 'Abwählen', action: () => editor.select(null) },
-              {
-                id: 'edit2',
-                label: 'Griffe an/aus',
-                action: () => {
-                  editor.setEditMode(!editor.editMode)
-                  this.menu.setLabel('edit', editor.editMode ? 'Griffe: an' : 'Griffe: aus')
-                },
-              },
+              { id: 'deselect', label: 'Auswahl aufheben', action: () => editor.clearSelection() },
+              { id: 'menu-hide', label: 'Menü schließen', action: () => this.menu.hide() },
             ],
           },
           {

@@ -42,7 +42,7 @@ interface ElementParts {
 export class ElementsLayer {
   readonly group = new Group()
   private parts = new Map<string, ElementParts>()
-  private selectedId: string | null = null
+  private selectedIds: string[] = []
 
   constructor() {
     this.group.name = 'elements'
@@ -77,13 +77,14 @@ export class ElementsLayer {
         this.parts.delete(id)
       }
     }
-    this.setSelected(this.selectedId)
+    this.setSelected(this.selectedIds)
   }
 
-  setSelected(id: string | null): void {
-    this.selectedId = id
+  setSelected(ids: string[]): void {
+    this.selectedIds = ids
+    const selected = new Set(ids)
     for (const [meshId, part] of this.parts) {
-      const emissive = meshId === id ? SELECTED_EMISSIVE : BLACK
+      const emissive = selected.has(meshId) ? SELECTED_EMISSIVE : BLACK
       part.body.emissive.copy(emissive)
       part.detail.emissive.copy(emissive)
       part.body.emissiveIntensity = 0.35
