@@ -88,7 +88,9 @@ export class Editor {
   tool: Tool = 'edit'
   paintColor = '#c9a063'
   onSelectionChange?: (id: string | null) => void
-  onToolChange?: (tool: Tool) => void
+
+  private readonly toolListeners = new Set<(tool: Tool) => void>()
+  private readonly colorListeners = new Set<(color: string) => void>()
 
   private drag: AxisDrag | PlaneDrag | null = null
   private hovered: Mesh | null = null
@@ -123,17 +125,28 @@ export class Editor {
     return this.store.getElement(this.selectedId)
   }
 
+  /** Mehrere Stellen hören mit – Panel und XR-Menü. */
+  addToolListener(listener: (tool: Tool) => void): void {
+    this.toolListeners.add(listener)
+  }
+
+  addPaintColorListener(listener: (color: string) => void): void {
+    this.colorListeners.add(listener)
+  }
+
   setTool(tool: Tool): void {
     if (tool === this.tool) return
     this.tool = tool
     if (tool !== 'edit') this.select(null)
     this.updateHandles()
     this.setHover(null)
-    this.onToolChange?.(tool)
+    for (const listener of this.toolListeners) listener(tool)
   }
 
   setPaintColor(color: string): void {
+    if (color === this.paintColor) return
     this.paintColor = color
+    for (const listener of this.colorListeners) listener(color)
   }
 
   select(id: string | null): void {

@@ -89,7 +89,7 @@ export function setupUI(o: UIOptions): void {
     document.body.classList.toggle('painting', tool === 'paint')
     document.body.classList.toggle('viewing', tool === 'view')
   }
-  editor.onToolChange = renderTool
+  editor.addToolListener(renderTool)
   renderTool(editor.tool)
 
   // --- Ansichten -------------------------------------------------------------
@@ -137,9 +137,15 @@ export function setupUI(o: UIOptions): void {
   function pickColor(color: string): void {
     editor.setPaintColor(color)
     editor.setTool('paint')
+    markColor(color)
+  }
+
+  function markColor(color: string): void {
     customColor.value = color
     for (const [c, btn] of swatches) btn.classList.toggle('active', c === color)
   }
+  editor.addPaintColorListener(markColor)
+  markColor(editor.paintColor)
 
   // --- Katalog ---------------------------------------------------------------
   const catalogEl = $('catalog')

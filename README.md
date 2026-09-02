@@ -111,6 +111,7 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   die Terrassentüren.
 - **Farbwerkzeug**: Farbe aus der Palette (oder eigene Farbe) wählen und
   Elemente, Wände oder den Boden per Klick einfärben – am Desktop und in VR.
+  Die gewählte Farbe ist in beiden Paletten markiert.
 - **Ansichten**: 3D (Orbit), isometrisch, 2D-Grundriss – jederzeit umschaltbar.
 - **WebXR**: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
   Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
@@ -119,9 +120,14 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   beiden Quest-3-Controllern und der Belegung je Werkzeug, dazu die Maus- und
   Tastaturbefehle. Da HTML in einer laufenden Immersive-Sitzung nicht sichtbar
   ist, gibt es dieselbe Grafik dort als Tafel im Blickfeld – einzublenden über
-  das VR-Menü (*Raum → Steuerung zeigen*). Immer sichtbar bleibt in XR nur eine
-  kleine Leiste unten rechts mit *☰ Menü* und dem aktiven Werkzeug. Menü, Leiste
-  und Tafel folgen dem Kopf, bleiben beim Gehen und Drehen also erreichbar.
+  das VR-Menü (*Raum → Steuerung zeigen*). Sie steht mittig im Blickfeld, hat
+  oben rechts einen Schließen-Knopf, und solange sie offen ist, greift der
+  Trigger nicht in die Szene – man kann also nichts versehentlich verstellen.
+- **In XR immer sichtbar** ist nur eine kleine Leiste unten rechts mit *☰ Menü*
+  und dem aktiven Werkzeug; sie liegt über allen anderen Elementen. Das Menü
+  selbst ist zu Beginn zu und wird über diese Leiste oder die Griff-Taste
+  auf- und zugeklappt, ein *✕* in seiner Reiterzeile schließt es ebenfalls.
+  Leiste, Menü und Tafel folgen dem Kopf, bleiben also beim Gehen erreichbar.
 - **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
   (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
   einen Server. Im Panel gibt es ihn zum Kopieren, dazu ein Feld mit dem
@@ -134,7 +140,7 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | --- | --- |
 | Maus | Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste = schwenken, Rad = Zoom. |
 | Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
-| Quest 3 · immer | Trigger = auswählen und ziehen · Griff = Menü holen · Leiste unten rechts = Menü und Werkzeug |
+| Quest 3 · immer | Trigger = auswählen und ziehen · Griff = Menü auf/zu · Leiste unten rechts = Menü und Werkzeug |
 | Quest 3 · Bearbeiten | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen |
 | Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe |
 

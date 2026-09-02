@@ -31,6 +31,8 @@ export interface XRMenuButton {
   label: string
   /** Hintergrundfarbe – für die Farbpalette. */
   background?: string
+  /** Knöpfe einer Gruppe schließen sich gegenseitig aus (z. B. die Farben). */
+  group?: string
   action: () => void
 }
 
@@ -61,6 +63,8 @@ export class XRMenu {
   private readonly labels = new Map<string, string>()
   private readonly pageGroups = new Map<string, Group>()
   private readonly tabs = new Map<string, Mesh>()
+  private readonly closeButton: Mesh
+  private readonly groups = new Map<string, string[]>()
   private hovered: Mesh | null = null
   private activePage: string
 
@@ -69,13 +73,15 @@ export class XRMenu {
     this.group.visible = false
     this.activePage = pages[0]?.id ?? ''
 
-    const tabW = (PANEL_W - GAP * (pages.length - 1)) / pages.length
+    // Ein Platz mehr in der Reiterzeile: ganz rechts schließt das Menü.
+    const slots = pages.length + 1
+    const tabW = (PANEL_W - GAP * (slots - 1)) / slots
     const contentHeights = pages.map((page) => pageHeight(page))
     const panelH = TITLE_H + GAP * 3 + Math.max(...contentHeights, 0)
 
     const panel = new Mesh(
       new PlaneGeometry(PANEL_W + GAP * 2, panelH + GAP * 2),
-      new MeshBasicMaterial({ color: new Color('#0f141b'), transparent: true, opacity: 0.88 }),
+      new MeshBasicMaterial({ color: new Color('#0f141b'), transparent: true, opacity: 0.9, depthTest: false }),
     )
     panel.position.z = -0.002
     this.group.add(panel)
@@ -108,6 +114,11 @@ export class XRMenu {
             mesh.position.set(col === 0 ? -(BTN_W + GAP) / 2 : (BTN_W + GAP) / 2, y - BTN_H / 2, 0.001)
             this.buttons.set(btn.id, mesh)
             this.labels.set(btn.id, btn.label)
+            if (btn.group) {
+              const ids = this.groups.get(btn.group) ?? []
+              ids.push(btn.id)
+              this.groups.set(btn.group, ids)
+            }
             pageGroup.add(mesh)
           })
           y -= BTN_H + GAP
@@ -117,13 +128,39 @@ export class XRMenu {
       this.group.add(pageGroup)
     })
 
+    this.closeButton = makeLabelPlane('✕', tabW, TITLE_H, '#5a2a2a', '#ffffff', 40)
+    this.closeButton.position.set(-PANEL_W / 2 + tabW / 2 + pages.length * (tabW + GAP), topY - TITLE_H / 2, 0.001)
+    this.closeButton.userData.button = {
+      id: 'menu-close',
+      label: 'Schließen',
+      action: () => this.hide(),
+    } satisfies XRMenuButton
+    this.group.add(this.closeButton)
+
+    // Das Menü liegt immer vor der Szene, nie halb in einer Wand.
+    this.group.traverse((object) => {
+      object.renderOrder = 900
+      const material = (object as Mesh).material as MeshBasicMaterial | undefined
+      if (material && 'depthTest' in material) material.depthTest = false
+    })
+
     this.showPage(this.activePage)
   }
 
   get interactive(): Mesh[] {
     const active = this.pageGroups.get(this.activePage)
     const rows = active ? (active.children.filter((c) => c.userData.button) as Mesh[]) : []
-    return [...this.tabs.values(), ...rows]
+    return [...this.tabs.values(), this.closeButton, ...rows]
+  }
+
+  /** Markiert einen Knopf innerhalb seiner Gruppe (z. B. die gewählte Farbe). */
+  setActiveInGroup(group: string, activeId: string | null): void {
+    for (const id of this.groups.get(group) ?? []) {
+      const mesh = this.buttons.get(id)
+      if (!mesh) continue
+      const button = mesh.userData.button as XRMenuButton
+      setPlaneLabel(mesh, this.labels.get(id) ?? button.label, button.background ?? BUTTON_BG, 40, id === activeId)
+    }
   }
 
   showPage(id: string): void {
@@ -189,15 +226,27 @@ function pageHeight(page: XRMenuPage): number {
   return page.rows.reduce((sum, row) => sum + (row.kind === 'title' ? TITLE_H : BTN_H) + GAP, 0)
 }
 
-function makeLabelPlane(text: string, w: number, h: number, bg: string, fg: string, fontPx: number): Mesh {
-  const mat = new MeshBasicMaterial({ map: makeTextTexture(text, bg, fg, fontPx), transparent: true })
+function makeLabelPlane(
+  text: string,
+  w: number,
+  h: number,
+  bg: string,
+  fg: string,
+  fontPx: number,
+  options: { depthTest?: boolean } = {},
+): Mesh {
+  const mat = new MeshBasicMaterial({
+    map: makeTextTexture(text, bg, fg, fontPx),
+    transparent: true,
+    depthTest: options.depthTest ?? true,
+  })
   return new Mesh(new PlaneGeometry(w, h), mat)
 }
 
-function setPlaneLabel(mesh: Mesh, text: string, bg: string, fontPx: number): void {
+function setPlaneLabel(mesh: Mesh, text: string, bg: string, fontPx: number, active = false): void {
   const mat = mesh.material as MeshBasicMaterial
   mat.map?.dispose()
-  mat.map = makeTextTexture(text, bg, textColorFor(bg), fontPx)
+  mat.map = makeTextTexture(text, bg, textColorFor(bg), fontPx, active)
   mat.needsUpdate = true
 }
 
@@ -210,7 +259,7 @@ function textColorFor(bg: string): string {
   return luminance > 0.55 ? '#14181f' : '#ffffff'
 }
 
-function makeTextTexture(text: string, bg: string, fg: string, fontPx: number): CanvasTexture {
+function makeTextTexture(text: string, bg: string, fg: string, fontPx: number, active = false): CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 512
   canvas.height = 128
@@ -218,6 +267,13 @@ function makeTextTexture(text: string, bg: string, fg: string, fontPx: number): 
   ctx.fillStyle = bg
   roundRect(ctx, 2, 2, canvas.width - 4, canvas.height - 4, 18)
   ctx.fill()
+  if (active) {
+    // Deutlicher Rahmen um die gerade gewählte Farbe.
+    ctx.strokeStyle = '#ffd23f'
+    ctx.lineWidth = 10
+    roundRect(ctx, 7, 7, canvas.width - 14, canvas.height - 14, 15)
+    ctx.stroke()
+  }
   ctx.fillStyle = fg
   let size = fontPx
   ctx.font = `600 ${size}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`
@@ -253,42 +309,54 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 class XRHud {
   readonly group = new Group()
   private readonly help: Mesh
+  private readonly helpClose: Mesh
   private readonly menuButton: Mesh
   private readonly toolButton: Mesh
   private readonly targetPosition = new Vector3()
   private readonly targetQuaternion = new Quaternion()
-  private readonly offset = new Vector3(0, 0, -0.72)
   private placed = false
   private hovered: Mesh | null = null
 
-  constructor(onMenu: () => void, onTool: () => void) {
+  constructor(onMenu: () => void, onTool: () => void, onCloseHelp: () => void) {
     this.group.name = 'xr-hud'
     this.group.visible = false
 
-    const helpWidth = 0.52
+    // Die Tafel steht mittig im Blickfeld und weiter weg, damit sie hineinpasst.
+    const helpWidth = 0.78
+    const helpHeight = helpWidth / HELP_ASPECT
+    const helpZ = -1.05
     this.help = new Mesh(
-      new PlaneGeometry(helpWidth, helpWidth / HELP_ASPECT),
+      new PlaneGeometry(helpWidth, helpHeight),
       new MeshBasicMaterial({ map: helpTexture(), transparent: true, depthTest: false }),
     )
-    this.help.position.set(0.2, -0.09, 0)
-    this.help.renderOrder = 998
+    this.help.position.set(0, 0, helpZ)
     this.help.raycast = () => undefined
     this.help.visible = false
 
-    this.menuButton = makeLabelPlane('☰ Menü', 0.1, 0.036, TAB_ACTIVE_BG, '#ffffff', 40)
-    this.menuButton.position.set(0.145, -0.3, 0)
+    this.helpClose = makeLabelPlane('✕ Schließen', 0.15, 0.05, '#5a2a2a', '#ffffff', 40, { depthTest: false })
+    this.helpClose.position.set(helpWidth / 2 - 0.075, helpHeight / 2 + 0.04, helpZ)
+    this.helpClose.userData.button = { id: 'help-close', label: 'Schließen', action: onCloseHelp }
+    this.helpClose.visible = false
+
+    this.menuButton = makeLabelPlane('☰ Menü', 0.1, 0.036, TAB_ACTIVE_BG, '#ffffff', 40, { depthTest: false })
+    this.menuButton.position.set(0.145, -0.3, -0.72)
     this.menuButton.userData.button = { id: 'hud-menu', label: 'Menü', action: onMenu }
 
-    this.toolButton = makeLabelPlane('Bearbeiten', 0.13, 0.036, BUTTON_BG, '#ffffff', 40)
-    this.toolButton.position.set(0.27, -0.3, 0)
+    this.toolButton = makeLabelPlane('Bearbeiten', 0.13, 0.036, BUTTON_BG, '#ffffff', 40, { depthTest: false })
+    this.toolButton.position.set(0.27, -0.3, -0.72)
     this.toolButton.userData.button = { id: 'hud-tool', label: 'Werkzeug', action: onTool }
 
-    for (const mesh of [this.menuButton, this.toolButton]) mesh.renderOrder = 999
-    this.group.add(this.help, this.menuButton, this.toolButton)
+    // Die Leiste liegt über allem – auch über Menü und Tafel.
+    this.help.renderOrder = 1500
+    this.helpClose.renderOrder = 2000
+    this.menuButton.renderOrder = 2000
+    this.toolButton.renderOrder = 2000
+    this.group.add(this.help, this.helpClose, this.menuButton, this.toolButton)
   }
 
   get interactive(): Mesh[] {
-    return this.group.visible ? [this.menuButton, this.toolButton] : []
+    if (!this.group.visible) return []
+    return this.help.visible ? [this.menuButton, this.toolButton, this.helpClose] : [this.menuButton, this.toolButton]
   }
 
   get helpVisible(): boolean {
@@ -302,6 +370,7 @@ class XRHud {
 
   setHelpVisible(visible: boolean): void {
     this.help.visible = visible
+    this.helpClose.visible = visible
   }
 
   setToolLabel(label: string): void {
@@ -318,7 +387,7 @@ class XRHud {
   /** Läuft dem Kopf weich hinterher, damit nichts am Blick klebt. */
   update(cameraPosition: Vector3, cameraQuaternion: Quaternion): void {
     if (!this.group.visible) return
-    this.targetPosition.copy(this.offset).applyQuaternion(cameraQuaternion).add(cameraPosition)
+    this.targetPosition.copy(cameraPosition)
     this.targetQuaternion.copy(cameraQuaternion)
     if (!this.placed) {
       this.group.position.copy(this.targetPosition)
@@ -379,11 +448,15 @@ export class XRManager {
     o.renderer.xr.setReferenceSpaceType('local-floor')
     this.menu = new XRMenu(this.buildMenu())
     this.hud = new XRHud(
-      () => (this.needsMenuPlacement = true),
+      () => this.toggleMenu(),
       () => this.cycleTool(),
+      () => this.setHelpVisible(false),
     )
     o.scene.add(this.menu.group, this.hud.group)
-    o.editor.onToolChange = (tool) => this.hud.setToolLabel(TOOL_LABELS[tool])
+    o.editor.addToolListener((tool) => this.hud.setToolLabel(TOOL_LABELS[tool]))
+    // Auch eine im Browser-Panel gewählte Farbe wird im VR-Menü markiert.
+    o.editor.addPaintColorListener((color) => this.menu.setActiveInGroup('color', `color-${color}`))
+    this.menu.setActiveInGroup('color', `color-${o.editor.paintColor}`)
     this.setupControllers()
   }
 
@@ -451,10 +524,13 @@ export class XRManager {
     const transparent = this.isAR || (blend !== undefined && blend !== 'opaque')
     this.o.roomView.setTransparent(transparent)
     this.o.editor.setHandleRadius(0.025)
-    this.needsMenuPlacement = true
+    // Das Menü bleibt zu – es kommt über die Leiste oder die Griff-Taste.
+    this.needsMenuPlacement = false
+    this.menu.hide()
     this.hud.setVisible(true)
     this.hud.setHelpVisible(false)
     this.hud.setToolLabel(TOOL_LABELS[this.o.editor.tool])
+    this.menu.setActiveInGroup('color', `color-${this.o.editor.paintColor}`)
     this.menu.setLabel('help', 'Steuerung zeigen')
     this.o.onSessionChange?.(true)
   }
@@ -485,7 +561,7 @@ export class XRManager {
       })
       controller.addEventListener('selectstart', () => this.onSelectStart(controller))
       controller.addEventListener('selectend', () => this.onSelectEnd(controller))
-      controller.addEventListener('squeezestart', () => (this.needsMenuPlacement = true))
+      controller.addEventListener('squeezestart', () => this.toggleMenu())
       player.add(controller)
       this.controllers.push(controller)
 
@@ -515,6 +591,8 @@ export class XRManager {
       this.menu.press(menuHit)
       return
     }
+    // Solange die Steuerungs-Tafel offen ist, bleibt die Szene unangetastet.
+    if (this.hud.helpVisible) return
     if (this.activeController) return
     if (this.o.editor.pointerDown(ray)) this.activeController = controller
   }
@@ -576,6 +654,17 @@ export class XRManager {
   private setTool(tool: Tool): void {
     this.o.editor.setTool(tool)
     this.hud.setToolLabel(TOOL_LABELS[tool])
+  }
+
+  /** Menü auf/zu – über die Leiste oder die Griff-Taste. */
+  private toggleMenu(): void {
+    if (this.menu.group.visible) this.menu.hide()
+    else this.needsMenuPlacement = true
+  }
+
+  private setHelpVisible(visible: boolean): void {
+    this.hud.setHelpVisible(visible)
+    this.menu.setLabel('help', visible ? 'Steuerung aus' : 'Steuerung zeigen')
   }
 
   private cycleTool(): void {
@@ -735,9 +824,11 @@ export class XRManager {
           id: `color-${color}`,
           label: name,
           background: color,
+          group: 'color',
           action: () => {
             editor.setPaintColor(color)
             editor.setTool('paint')
+            this.menu.setActiveInGroup('color', `color-${color}`)
           },
         })),
       })
@@ -774,15 +865,7 @@ export class XRManager {
           {
             kind: 'buttons',
             buttons: [
-              {
-                id: 'help',
-                label: 'Steuerung zeigen',
-                action: () => {
-                  const show = !this.hud.helpVisible
-                  this.hud.setHelpVisible(show)
-                  this.menu.setLabel('help', show ? 'Steuerung aus' : 'Steuerung zeigen')
-                },
-              },
+              { id: 'help', label: 'Steuerung zeigen', action: () => this.setHelpVisible(!this.hud.helpVisible) },
               { id: 'exit-room', label: 'XR beenden', action: () => void this.o.renderer.xr.getSession()?.end() },
             ],
           },
