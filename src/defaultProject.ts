@@ -113,45 +113,67 @@ interface Item {
 }
 
 /**
- * Küche nach dem Referenzbild: L aus Westzeile und Nordzeile unter dem Fenster,
- * Hochschrankblock an der Flurwand und eine freistehende Kochinsel.
+ * Küche nach dem Plan:
+ *
+ *   X x x x x x x     X/x  Unterschrank + Arbeitsplatte + Hängeschrank darüber
+ *   H 0 0 0 0 0       H/h  Hochschrank
+ *   H 0 0 K K 0       K    Kochinsel
+ *   h 0 0 K K 0       0    frei
+ *   0 0 0 0 0 0
+ *
+ * Die durchgehende Zeile liegt an der **Westwand** – das ist die einzige Wand
+ * der Küche ohne Fenster und damit die einzige, an die Hängeschränke passen.
+ * Der Hochschrankblock steht quer dazu an der **Südwand** (Wand zum Flur); an
+ * der Nordwand wäre er nicht möglich, dort sitzt das 209 cm breite Fenster.
+ * Die Insel steht frei im Raum, mit rund 105 cm Gang zur Zeile und zum Block.
  */
 const KITCHEN: Item[] = [
-  // --- Westzeile: Unterschränke ---
-  ...[30, 90, 150, 210].map((z, i) => ({
-    defId: i === 1 ? 'drawer-60' : 'base-60',
-    name: i === 1 ? 'Schubladenschrank 60' : 'Unterschrank 60',
-    at: [30, 0, z] as [number, number, number],
-    size: [BASE_D, BASE_H, 60] as [number, number, number],
+  // --- Westzeile: sieben Unterschränke (6 × 60 + 49 Passstück = 409) ---
+  ...[
+    { z: 30, w: 60, id: 'base-60', name: 'Unterschrank 60' },
+    { z: 90, w: 60, id: 'drawer-60', name: 'Schubladenschrank 60' },
+    { z: 150, w: 60, id: 'base-60', name: 'Unterschrank 60' },
+    { z: 210, w: 60, id: 'sink-60', name: 'Spülenschrank 60' },
+    { z: 270, w: 60, id: 'drawer-60', name: 'Schubladenschrank 60' },
+    { z: 330, w: 60, id: 'base-60', name: 'Unterschrank 60' },
+    { z: 384.5, w: 49, id: 'base-60', name: 'Unterschrank 49 (Passstück)' },
+  ].map(({ z, w, id, name }) => ({
+    defId: id,
+    name,
+    at: [BASE_D / 2, 0, z] as [number, number, number],
+    size: [BASE_D, BASE_H, w] as [number, number, number],
     color: KITCHEN_COLORS.front,
   })),
   {
-    defId: 'base-60',
-    name: 'Unterschrank 49 (Passstück)',
-    at: [30, 0, 264.5],
-    size: [BASE_D, BASE_H, 49],
-    color: KITCHEN_COLORS.front,
-  },
-  {
     defId: 'worktop',
     name: 'Arbeitsplatte West',
-    at: [WORKTOP_D / 2, BASE_H, 144.5],
-    size: [WORKTOP_D, WORKTOP_T, 289],
+    at: [WORKTOP_D / 2, BASE_H, 204.5],
+    size: [WORKTOP_D, WORKTOP_T, 409],
     color: KITCHEN_COLORS.oak,
   },
   {
     defId: 'splashback',
     name: 'Rückwand West',
-    at: [1, BASE_H + WORKTOP_T, 144.5],
-    size: [2, WALL_UNIT_Y - BASE_H - WORKTOP_T, 289],
+    at: [1, BASE_H + WORKTOP_T, 204.5],
+    size: [2, WALL_UNIT_Y - BASE_H - WORKTOP_T, 409],
     color: KITCHEN_COLORS.splashback,
   },
-  // --- Westzeile: Hängeschränke (über der Spüle bleibt es offen) ---
+  {
+    defId: 'sink-basin',
+    name: 'Spülbecken',
+    at: [28, BASE_H + 0.5, 210],
+    size: [40, WORKTOP_T, 50],
+    color: KITCHEN_COLORS.sink,
+  },
+  // --- Über jedem Unterschrank ein Hängeschrank ---
   ...[
     { z: 30, w: 60 },
     { z: 90, w: 60 },
+    { z: 150, w: 60 },
     { z: 210, w: 60 },
-    { z: 264.5, w: 49 },
+    { z: 270, w: 60 },
+    { z: 330, w: 60 },
+    { z: 384.5, w: 49 },
   ].map(({ z, w }) => ({
     defId: 'wall-60',
     name: `Hängeschrank ${w}`,
@@ -159,84 +181,59 @@ const KITCHEN: Item[] = [
     size: [WALL_UNIT_D, WALL_UNIT_H, w] as [number, number, number],
     color: KITCHEN_COLORS.front,
   })),
-  // --- Hochschrankblock an der Flurwand ---
-  {
-    defId: 'oven-60',
-    name: 'Herdumbauschrank 60',
-    at: [TALL_D / 2, 0, 319],
-    size: [TALL_D, TALL_H, 60],
+  // --- Hochschrankblock quer dazu an der Südwand ---
+  ...[
+    { x: 90, id: 'oven-60', name: 'Herdumbauschrank 60' },
+    { x: 150, id: 'tall-60', name: 'Hochschrank 60' },
+    { x: 210, id: 'fridge-60', name: 'Kühlschrank 60' },
+  ].map(({ x, id, name }) => ({
+    defId: id,
+    name,
+    at: [x, 0, 409 - TALL_D / 2] as [number, number, number],
+    size: [60, TALL_H, TALL_D] as [number, number, number],
     color: KITCHEN_COLORS.front,
-  },
-  {
-    defId: 'fridge-60',
-    name: 'Kühlschrank 60',
-    at: [TALL_D / 2, 0, 379],
-    size: [TALL_D, TALL_H, 60],
-    color: KITCHEN_COLORS.front,
-  },
-  ...[319, 379].map((z) => ({
+  })),
+  ...[90, 150, 210].map((x) => ({
     defId: 'top-60',
     name: 'Aufsatzschrank 60',
-    at: [TALL_D / 2, TALL_H, z] as [number, number, number],
-    size: [TALL_D, TOP_UNIT_H, 60] as [number, number, number],
+    at: [x, TALL_H, 409 - TALL_D / 2] as [number, number, number],
+    size: [60, TOP_UNIT_H, TALL_D] as [number, number, number],
     color: KITCHEN_COLORS.front,
   })),
   {
     defId: 'oven',
     name: 'Backofen',
-    at: [TALL_D, 85, 319],
-    size: [4, 60, 56],
+    at: [90, 85, 409 - TALL_D],
+    size: [56, 60, 4],
     color: KITCHEN_COLORS.black,
   },
-  // --- Nordzeile unter dem Fenster, mit Spüle ---
-  ...[92, 152, 212].map((x, i) => ({
-    defId: i === 1 ? 'sink-60' : 'base-60',
-    name: i === 1 ? 'Spülenschrank 60' : 'Unterschrank 60',
-    at: [x, 0, 30] as [number, number, number],
-    size: [60, BASE_H, BASE_D] as [number, number, number],
-    color: KITCHEN_COLORS.front,
-  })),
-  {
-    defId: 'worktop',
-    name: 'Arbeitsplatte Nord',
-    at: [152, BASE_H, WORKTOP_D / 2],
-    size: [180, WORKTOP_T, WORKTOP_D],
-    color: KITCHEN_COLORS.oak,
-  },
-  {
-    defId: 'sink-basin',
-    name: 'Spülbecken',
-    at: [152, BASE_H + 0.5, 30],
-    size: [50, WORKTOP_T, 40],
-    color: KITCHEN_COLORS.sink,
-  },
-  // --- Kochinsel ---
+  // --- Kochinsel (2 × 2 Rasterfelder) ---
   {
     defId: 'island',
     name: 'Kochinsel',
-    at: [225, 0, 260],
-    size: [90, BASE_H, 180],
+    at: [230, 0, 170],
+    size: [120, BASE_H, 120],
     color: KITCHEN_COLORS.front,
   },
   {
     defId: 'island-top',
     name: 'Inselplatte',
-    at: [225, BASE_H, 260],
-    size: [100, WORKTOP_T, 190],
+    at: [230, BASE_H, 170],
+    size: [130, WORKTOP_T, 130],
     color: KITCHEN_COLORS.oak,
   },
   {
     defId: 'hob',
     name: 'Kochfeld',
-    at: [225, BASE_H + 2, 240],
-    size: [52, WORKTOP_T, 80],
+    at: [230, BASE_H + 2, 170],
+    size: [80, WORKTOP_T, 52],
     color: KITCHEN_COLORS.black,
   },
   {
     defId: 'hood',
     name: 'Dunstabzugshaube',
-    at: [225, 155, 240],
-    size: [50, 35, 100],
+    at: [230, 155, 170],
+    size: [100, 35, 60],
     color: KITCHEN_COLORS.black,
   },
 ]

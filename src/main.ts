@@ -120,7 +120,7 @@ if (!showUI) document.body.classList.add('no-ui')
 
 /** Blick in die Küche – derselbe Ausschnitt wie im README-Screenshot. */
 function focusKitchen(): void {
-  views.focus(roomToWorld(5.2, 1.75, 3.15), roomToWorld(1.0, 1.0, 1.35))
+  views.focus(roomToWorld(5.2, 1.75, 0.7), roomToWorld(0.9, 1.0, 2.5))
 }
 
 /** `?cam=px,py,pz,tx,ty,tz` (Grundriss-Meter) – zum Einrichten eigener Ansichten. */

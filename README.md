@@ -53,10 +53,28 @@ z nach Süden; alle Maße in cm):
 Bereich hinter dem Flur (Büro) ist in der Skizze abgeschnitten und daher nicht
 modelliert. Alles davon lässt sich in `src/defaultProject.ts` anpassen.
 
-Die **Küche** folgt dem Referenz-Rendering: L-Form aus Westzeile (Unterschränke,
-Hängeschränke, Rückwand) und Nordzeile unter dem Fenster mit Spüle, dazu der
-Hochschrankblock mit Backofen und Kühlschrank an der Flurwand sowie eine
-freistehende Kochinsel mit Kochfeld und Dunstabzugshaube.
+Die **Küche** folgt diesem Raster:
+
+```
+X x x x x x x     X/x  Unterschrank + Arbeitsplatte + Hängeschrank darüber
+H 0 0 0 0 0       H/h  Hochschrank
+H 0 0 K K 0       K    Kochinsel
+h 0 0 K K 0       0    frei
+0 0 0 0 0 0
+```
+
+Die durchgehende Zeile aus sieben Unterschränken (6 × 60 cm + 49 cm Passstück =
+409 cm) mit Arbeitsplatte und Hängeschränken liegt an der **Westwand** – der
+einzigen Wand der Küche ohne Fenster und damit der einzigen, an die
+Hängeschränke passen. Die Spüle sitzt in der Mitte dieser Zeile.
+
+Der Block aus drei Hochschränken (Herdumbau mit Backofen, Hochschrank,
+Kühlschrank) steht quer dazu an der **Südwand** zum Flur. An der Nordwand wäre
+er nicht möglich, dort sitzt das 209 cm breite Fenster – falls der Block dort
+stehen soll, muss das Fenster anders liegen.
+
+Die Kochinsel (120 × 120 cm) mit Kochfeld und Dunstabzugshaube steht frei im
+Raum, mit rund 105 cm Gang zur Zeile und zum Hochschrankblock.
 
 ## Funktionen
 
