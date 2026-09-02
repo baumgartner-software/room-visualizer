@@ -356,9 +356,19 @@ export class Editor {
     }
   }
 
-  /** Dreht alle ausgewählten Objekte. */
+  /** Dreht alle ausgewählten Objekte um die Hochachse. */
   rotateSelected(): void {
     for (const id of this.selectedIds) this.store.rotateElement(id)
+  }
+
+  /** Kippt alle ausgewählten Objekte um die Quer- bzw. Längsachse. */
+  tiltSelected(axis: 'x' | 'z'): void {
+    for (const id of this.selectedIds) this.store.tiltElement(id, axis)
+  }
+
+  /** Spiegelt die Fronten der Auswahl (Griff wechselt die Seite). */
+  mirrorSelected(): void {
+    for (const id of this.selectedIds) this.store.mirrorElement(id)
   }
 
   private afterSelectionChange(): void {

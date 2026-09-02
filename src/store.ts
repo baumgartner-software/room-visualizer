@@ -1,3 +1,4 @@
+import { Euler, Matrix4 } from 'three'
 import { defaultProject } from './defaultProject'
 import { bounds, rectangularRoom } from './geometry'
 import type { ElementDef, PlacedElement, ProjectState, RoomSpec, Vec3 } from './types'
@@ -18,27 +19,74 @@ export function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), max)
 }
 
-/** Grundfläche (w/d in Raumachsen) unter Berücksichtigung der 90°-Drehung. */
-export function footprint(el: PlacedElement): { w: number; d: number } {
-  const quarterTurns = Math.round(el.rotationY / (Math.PI / 2))
-  const swapped = Math.abs(quarterTurns) % 2 === 1
-  return swapped ? { w: el.size.d, d: el.size.w } : { w: el.size.w, d: el.size.d }
+const rotationMatrix = new Matrix4()
+const rotationEuler = new Euler()
+
+interface LocalAabb {
+  min: Vec3
+  max: Vec3
 }
 
 /**
- * Hält das Element im umschließenden Rechteck des Grundrisses. Bei L-förmigen
- * Räumen darf ein Element damit auch außerhalb der Bodenfläche liegen – das ist
- * bewusst so, damit sich nichts „von selbst“ verschiebt.
+ * Hüllbox des gedrehten Quaders, relativ zum Ursprung des Elements (Mitte der
+ * Unterkante). Weil der Ursprung unten sitzt und nicht in der Mitte, ist die
+ * Box nach dem Kippen nicht symmetrisch – deshalb min und max statt bloßer
+ * Ausdehnung.
+ */
+export function localAabb(el: PlacedElement): LocalAabb {
+  rotationEuler.set(el.rotationX ?? 0, el.rotationY, el.rotationZ ?? 0)
+  const m = rotationMatrix.makeRotationFromEuler(rotationEuler).elements
+  const { w, h, d } = el.size
+  const min = { x: Infinity, y: Infinity, z: Infinity }
+  const max = { x: -Infinity, y: -Infinity, z: -Infinity }
+  for (const x of [-w / 2, w / 2]) {
+    for (const y of [0, h]) {
+      for (const z of [-d / 2, d / 2]) {
+        const px = m[0] * x + m[4] * y + m[8] * z
+        const py = m[1] * x + m[5] * y + m[9] * z
+        const pz = m[2] * x + m[6] * y + m[10] * z
+        min.x = Math.min(min.x, px)
+        min.y = Math.min(min.y, py)
+        min.z = Math.min(min.z, pz)
+        max.x = Math.max(max.x, px)
+        max.y = Math.max(max.y, py)
+        max.z = Math.max(max.z, pz)
+      }
+    }
+  }
+  return { min, max }
+}
+
+/** Ausdehnung entlang der Raumachsen. */
+export function worldExtents(el: PlacedElement): { w: number; h: number; d: number } {
+  const { min, max } = localAabb(el)
+  return { w: max.x - min.x, h: max.y - min.y, d: max.z - min.z }
+}
+
+/** Grundfläche in Raumachsen. */
+export function footprint(el: PlacedElement): { w: number; d: number } {
+  const { w, d } = worldExtents(el)
+  return { w, d }
+}
+
+/**
+ * Hält das Element im umschließenden Rechteck des Grundrisses. Gerechnet wird
+ * mit der Hüllbox, damit auch gekippte Objekte weder im Boden noch in der Decke
+ * stecken. Bei L-förmigen Räumen darf ein Element außerhalb der Bodenfläche
+ * liegen – das ist bewusst so, damit sich nichts „von selbst“ verschiebt.
  */
 export function clampToRoom(el: PlacedElement, room: RoomSpec): Vec3 {
   const b = bounds(room)
-  const fp = footprint(el)
-  const hw = fp.w / 2
-  const hd = fp.d / 2
+  const { min, max } = localAabb(el)
+  const fit = (value: number, lo: number, hi: number, offsetMin: number, offsetMax: number): number => {
+    const low = lo - offsetMin
+    const high = hi - offsetMax
+    return low > high ? (low + high) / 2 : clamp(value, low, high)
+  }
   return {
-    x: fp.w >= b.width ? b.centerX : clamp(el.position.x, b.minX + hw, b.maxX - hw),
-    y: el.size.h >= room.height ? 0 : clamp(el.position.y, 0, room.height - el.size.h),
-    z: fp.d >= b.depth ? b.centerZ : clamp(el.position.z, b.minZ + hd, b.maxZ - hd),
+    x: fit(el.position.x, b.minX, b.maxX, min.x, max.x),
+    y: fit(el.position.y, 0, room.height, min.y, max.y),
+    z: fit(el.position.z, b.minZ, b.maxZ, min.z, max.z),
   }
 }
 
@@ -142,6 +190,9 @@ export class Store {
       el.position = { x: snap(patch.position.x), y: snap(patch.position.y), z: snap(patch.position.z) }
     }
     if (patch.rotationY !== undefined) el.rotationY = patch.rotationY
+    if (patch.rotationX !== undefined) el.rotationX = patch.rotationX
+    if (patch.rotationZ !== undefined) el.rotationZ = patch.rotationZ
+    if (patch.mirrored !== undefined) el.mirrored = patch.mirrored
     if (patch.name !== undefined) el.name = patch.name
     if (patch.color !== undefined) el.color = patch.color
     if (patch.front !== undefined) el.front = patch.front
@@ -170,6 +221,28 @@ export class Store {
     this.state.elements.push(copy)
     this.emit()
     return copy
+  }
+
+  /** Kippt das Objekt um 90° um die Quer- (x) oder Längsachse (z). */
+  tiltElement(id: string, axis: 'x' | 'z'): void {
+    const el = this.getElement(id)
+    if (!el) return
+    const key = axis === 'x' ? 'rotationX' : 'rotationZ'
+    const before = localAabb(el).min.y
+    const turns = Math.round((el[key] ?? 0) / (Math.PI / 2))
+    el[key] = ((turns + 1) % 4) * (Math.PI / 2)
+    // Unterkante bleibt, wo sie war – sonst steckt das Objekt im Boden.
+    el.position = { ...el.position, y: el.position.y + before - localAabb(el).min.y }
+    el.position = clampToRoom(el, this.state.room)
+    this.emit()
+  }
+
+  /** Spiegelt die Front – Griff und Anschlag wechseln die Seite. */
+  mirrorElement(id: string): void {
+    const el = this.getElement(id)
+    if (!el) return
+    el.mirrored = !el.mirrored
+    this.emit()
   }
 
   removeElement(id: string): void {
@@ -217,8 +290,11 @@ function normalize(raw: unknown): ProjectState {
         size: { w: +e.size.w || 0.5, h: +e.size.h || 0.5, d: +e.size.d || 0.5 },
         position: { x: +e.position.x || 0, y: +e.position.y || 0, z: +e.position.z || 0 },
         rotationY: +e.rotationY || 0,
+        rotationX: +(e.rotationX ?? 0) || 0,
+        rotationZ: +(e.rotationZ ?? 0) || 0,
         color: e.color ?? '#9ecae1',
         front: e.front,
+        mirrored: !!e.mirrored,
       })),
   }
 }

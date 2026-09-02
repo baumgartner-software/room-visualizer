@@ -97,9 +97,14 @@ export interface PlacedElement {
   size: Size
   /** Drehung um die Hochachse in Radiant (Vielfache von 90°). */
   rotationY: number
+  /** Kippen um die Quer- bzw. Längsachse, ebenfalls in Vielfachen von 90°. */
+  rotationX?: number
+  rotationZ?: number
   color: string
   /** Richtung der Front (lokale Achse); ohne Angabe glatter Quader. */
   front?: FrontDir
+  /** Gespiegelte Front – Griff und Anschlag wechseln die Seite. */
+  mirrored?: boolean
 }
 
 export interface ProjectState {

@@ -881,7 +881,10 @@ export class XRManager {
     const now = performance.now()
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000)
     this.lastFrame = now
-    const editing = editor.tool === 'edit'
+    // Erst im Griff-Schritt steuern die Sticks Objekte; davor bewegen sie den
+    // Nutzer genau wie im Werkzeug Ansicht.
+    const editing = editor.tool === 'edit' && editor.editPhase === 'transform'
+    const canEditSelection = editor.tool === 'edit'
 
     for (const controller of this.controllers) {
       const source = controller.userData.inputSource as XRInputSource | null
@@ -910,13 +913,8 @@ export class XRManager {
             const turns = dirX > 0 ? 1 : 3
             for (let i = 0; i < turns; i++) editor.rotateSelected()
           }
-          if (Math.abs(stickY) > 0.25 && editor.editPhase === 'transform') {
-            editor.nudgeSelected({ y: -stickY * 0.35 * dt })
-          }
-        } else if (
-          editor.editPhase === 'transform' &&
-          (Math.abs(stickX) > 0.25 || Math.abs(stickY) > 0.25)
-        ) {
+          if (Math.abs(stickY) > 0.25) editor.nudgeSelected({ y: -stickY * 0.35 * dt })
+        } else if (Math.abs(stickX) > 0.25 || Math.abs(stickY) > 0.25) {
           const forward = new Vector3(0, 0, -1).applyQuaternion(camQuaternion)
           forward.y = 0
           if (forward.lengthSq() > 1e-6) {
@@ -957,11 +955,11 @@ export class XRManager {
       state.stick = stickPressed
 
       const a = pad.buttons[4]?.pressed ?? false
-      if (a && !state.a && editing) this.duplicateSelection()
+      if (a && !state.a && canEditSelection) this.duplicateSelection()
       state.a = a
 
       const b = pad.buttons[5]?.pressed ?? false
-      if (b && !state.b && editing) {
+      if (b && !state.b && canEditSelection) {
         for (const id of [...editor.selectedIds]) store.removeElement(id)
       }
       state.b = b
@@ -1102,6 +1100,13 @@ export class XRManager {
                 action: () => editor.setEditPhase(editor.editPhase === 'transform' ? 'select' : 'transform'),
               },
               { id: 'rotate', label: 'Drehen 90°', action: () => editor.rotateSelected() },
+            ],
+          },
+          {
+            kind: 'buttons',
+            buttons: [
+              { id: 'mirror', label: 'Spiegeln', action: () => editor.mirrorSelected() },
+              { id: 'tilt', label: 'Kippen 90°', action: () => editor.tiltSelected('x') },
             ],
           },
           {

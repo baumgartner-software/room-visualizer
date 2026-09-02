@@ -113,6 +113,10 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   mehreren ausgewählten Objekten bleiben nur die **grünen** übrig, mit denen
   sich alle gleichzeitig in der Höhe anpassen lassen. Breite und Tiefe hängen an
   der Drehung jedes einzelnen Objekts und wären für eine Gruppe nicht eindeutig.
+- **Ausrichten**: *Drehen 90°* um die Hochachse, *Kippen X* und *Kippen Z* um die
+  waagerechten Achsen (das Objekt bleibt dabei auf seiner Unterkante stehen) und
+  *Spiegeln*, womit Griff und Anschlag der Front die Seite wechseln. Alles wirkt
+  auf die gesamte Auswahl.
 - **Hover-Rahmen**: Das Objekt unter dem Mauszeiger bzw. dem Controller-Strahl
   bekommt einen gelben Rahmen – auch Wände und Boden im Werkzeug *Farbe*.
 - **Umgebung**: Rasenfläche und Himmelskuppel rund um das Haus, sichtbar durch
@@ -153,7 +157,8 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | Maus | Klick = auswählen · <kbd>Umschalt</kbd>+Klick = weitere hinzunehmen · Griffe ziehen = bewegen und aufziehen · rechte Taste = schwenken |
 | Tastatur | `E` Griffe zeigen / zurück zur Auswahl · `R` drehen · `Entf` löschen · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
 | Quest 3 · immer | Trigger = Objekte auswählen · linken Stick drücken = Menü auf/zu · Leiste unten rechts = Menü · Werkzeug · Griffe zeigen · Auswahl aufheben |
-| Quest 3 · Bearbeiten | Im Griff-Schritt: linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen – alles auf die gesamte Auswahl |
+| Quest 3 · Bearbeiten, Auswahl-Schritt | Sticks bewegen dich wie im Werkzeug *Ansicht* · A/X = duplizieren · B/Y = löschen |
+| Quest 3 · Bearbeiten, Griff-Schritt | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) – alles auf die gesamte Auswahl |
 | Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe · auf die Palette am linken Controller zeigen: ↑↓ blättert |
 
 ### URL-Parameter

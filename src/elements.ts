@@ -112,7 +112,7 @@ export class ElementsLayer {
     const { mesh, body, detail } = part
     mesh.position.set(el.position.x, el.position.y, el.position.z)
     mesh.scale.set(el.size.w, el.size.h, el.size.d)
-    mesh.rotation.y = el.rotationY
+    mesh.rotation.set(el.rotationX ?? 0, el.rotationY, el.rotationZ ?? 0)
     mesh.name = el.name
     if (`#${body.color.getHexString()}` !== el.color.toLowerCase()) {
       body.color.set(el.color)
@@ -120,7 +120,7 @@ export class ElementsLayer {
     }
 
     const def = getDef(el.defId)
-    const signature = [el.defId, el.front ?? '-', el.size.w, el.size.h, el.size.d].join('|')
+    const signature = [el.defId, el.front ?? '-', el.mirrored ? 'm' : '-', el.size.w, el.size.h, el.size.d].join('|')
     if (signature !== part.signature) {
       part.signature = signature
       this.buildDetails(part, el, def)
@@ -143,7 +143,14 @@ export class ElementsLayer {
       return
     }
     if (!el.front || !def?.frontPanels) return
-    for (const o of buildFront(el.size, el.front, def.frontPanels, def.handle ?? 'vertical', detail)) {
+    for (const o of buildFront(
+      el.size,
+      el.front,
+      def.frontPanels,
+      def.handle ?? 'vertical',
+      detail,
+      !!el.mirrored,
+    )) {
       deco.add(o)
     }
     mesh.updateMatrixWorld()
@@ -200,6 +207,7 @@ function buildFront(
   panels: [number, number],
   handle: 'vertical' | 'horizontal' | 'none',
   material: MeshStandardMaterial,
+  mirrored: boolean,
 ): Object3D[] {
   const axes = faceAxes(size, front)
   const [cols, rows] = panels
@@ -234,7 +242,8 @@ function buildFront(
       if (handle === 'horizontal') {
         bar(uc, vc, Math.min(0.28, cellW * 0.55), 0.016, RELIEF + 0.026, HANDLE_MATERIAL)
       } else if (handle === 'vertical') {
-        const u = uc + cellW / 2 - rail - 0.025
+        // Gespiegelt sitzt der Griff auf der anderen Seite (Anschlag wechseln).
+        const u = uc + (mirrored ? -1 : 1) * (cellW / 2 - rail - 0.025)
         bar(u, vc, 0.016, Math.min(0.2, cellH * 0.45), RELIEF + 0.026, HANDLE_MATERIAL)
       }
     }

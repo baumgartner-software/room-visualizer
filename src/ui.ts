@@ -184,8 +184,13 @@ export function setupUI(o: UIOptions): void {
   }
   for (const input of Object.values(sel)) input.addEventListener('change', applySelection)
 
-  $('sel-rotate').addEventListener('click', () => editor.selectedId && store.rotateElement(editor.selectedId))
-  $('sel-delete').addEventListener('click', () => editor.selectedId && store.removeElement(editor.selectedId))
+  $('sel-rotate').addEventListener('click', () => editor.rotateSelected())
+  $('sel-mirror').addEventListener('click', () => editor.mirrorSelected())
+  $('sel-tilt-x').addEventListener('click', () => editor.tiltSelected('x'))
+  $('sel-tilt-z').addEventListener('click', () => editor.tiltSelected('z'))
+  $('sel-delete').addEventListener('click', () => {
+    for (const id of [...editor.selectedIds]) store.removeElement(id)
+  })
   $('sel-duplicate').addEventListener('click', () => {
     const copy = editor.selectedId ? store.duplicate(editor.selectedId) : undefined
     if (copy) editor.select(copy.id)

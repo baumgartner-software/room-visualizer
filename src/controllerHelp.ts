@@ -14,7 +14,8 @@ export interface ControlHint {
 
 export const EDIT_CONTROLS: ControlHint[] = [
   { key: 'Trigger', action: 'Objekte zur Auswahl tippen' },
-  { key: 'Griffe zeigen', action: 'Knopf unten rechts' },
+  { key: 'Sticks', action: 'Beim Auswählen: gehen wie in Ansicht' },
+  { key: 'Griffe zeigen', action: 'Knopf unten rechts – dann steuern die Sticks' },
   { key: 'L-Stick ↑ ↓', action: 'Auswahl höher / tiefer' },
   { key: 'L-Stick ← →', action: 'Auswahl um 90° drehen' },
   { key: 'R-Stick', action: 'Auswahl in der Ebene schieben' },
