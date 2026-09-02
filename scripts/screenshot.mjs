@@ -23,10 +23,14 @@ const outDir = resolve(root, process.env.SCREENSHOT_DIR ?? 'docs/preview')
 const PORT = Number(process.env.SCREENSHOT_PORT ?? 4183)
 const TIMEOUT_MS = Number(process.env.SCREENSHOT_TIMEOUT_MS ?? 240_000)
 
+/**
+ * Auflösung bewusst ohne deviceScaleFactor: Software-Rendering (SwiftShader)
+ * auf CI-Runnern schafft die vierfache Pixelmenge nicht in vertretbarer Zeit.
+ */
 const SHOTS = [
-  { file: 'kitchen.png', query: 'view=kitchen', width: 1600, height: 900 },
-  { file: 'isometrisch.png', query: 'view=isometric', width: 1600, height: 1000 },
-  { file: 'grundriss.png', query: 'view=top', width: 1400, height: 1000 },
+  { file: 'kitchen.png', query: 'view=kitchen', width: 2000, height: 1125 },
+  { file: 'isometrisch.png', query: 'view=isometric', width: 1800, height: 1125 },
+  { file: 'grundriss.png', query: 'view=top', width: 1600, height: 1150 },
 ]
 
 const MIME = {
@@ -78,10 +82,7 @@ const browser = await chromium.launch({
 const problems = []
 try {
   for (const shot of SHOTS) {
-    const page = await browser.newPage({
-      viewport: { width: shot.width, height: shot.height },
-      deviceScaleFactor: 2,
-    })
+    const page = await browser.newPage({ viewport: { width: shot.width, height: shot.height } })
     page.on('pageerror', (err) => problems.push(`${shot.file}: ${err.message}`))
     page.on('console', (msg) => {
       if (msg.type() === 'error') problems.push(`${shot.file}: ${msg.text()}`)
@@ -92,7 +93,7 @@ try {
       polling: 250,
     })
     await page.waitForTimeout(500)
-    await page.screenshot({ path: resolve(outDir, shot.file) })
+    await page.screenshot({ path: resolve(outDir, shot.file), timeout: 120_000 })
     await page.close()
     console.log(`✓ ${shot.file}`)
   }
