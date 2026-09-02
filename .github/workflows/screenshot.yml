@@ -21,6 +21,7 @@ jobs:
   screenshot:
     name: Rendern & einchecken
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +33,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: Bilder rendern
+        timeout-minutes: 8
         run: npm run screenshot
       - name: Geänderte Bilder committen
         run: |
