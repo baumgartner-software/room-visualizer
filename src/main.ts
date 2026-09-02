@@ -7,6 +7,7 @@ import { ElementsLayer } from './elements'
 import { bounds } from './geometry'
 import { RoomView } from './room'
 import { Environment } from './environment'
+import { MeasureLayer } from './measure'
 import { decodeState, encodeState, shareUrl, tokenFromLocation } from './share'
 import { Store } from './store'
 import type { ElementDef, RoomSpec } from './types'
@@ -58,7 +59,10 @@ roomGroup.add(roomView.group)
 const layer = new ElementsLayer()
 roomGroup.add(layer.group)
 
-const editor = new Editor(store, layer, roomView)
+const measure = new MeasureLayer()
+scene.add(measure.group)
+
+const editor = new Editor(store, layer, roomView, measure)
 scene.add(editor.handles, editor.hoverOutline)
 
 const views = new Views(canvas, store.room)
@@ -172,6 +176,8 @@ function isTransparentSession(): boolean {
 setupUI({
   store,
   editor,
+  roomView,
+  measure,
   catalog: CATALOG,
   placeElement: (def) => placeElement(def),
   setView: (mode) => {
@@ -246,6 +252,10 @@ const endPointer = (e: PointerEvent): void => {
 }
 canvas.addEventListener('pointerup', endPointer)
 canvas.addEventListener('pointercancel', endPointer)
+// Verlässt der Zeiger die Zeichenfläche, darf kein Griff hervorgehoben bleiben.
+canvas.addEventListener('pointerleave', () => {
+  if (!editor.isDragging) editor.hover(null)
+})
 
 // --- Tastatur ----------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
@@ -257,6 +267,10 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === 'v' || e.key === 'V') {
     editor.setTool(editor.tool === 'view' ? 'edit' : 'view')
+    return
+  }
+  if (e.key === 'm' || e.key === 'M') {
+    editor.setTool(editor.tool === 'measure' ? 'edit' : 'measure')
     return
   }
   if (e.key === 'Escape') {
@@ -307,6 +321,8 @@ const api = {
   ready: false,
   store,
   editor,
+  measure,
+  roomView,
   xr,
   views,
   focusKitchen,

@@ -58,6 +58,8 @@ export class RoomView {
   })
   private height = 2.5
   private outline: import('./types').Vec2[] = []
+  private wallsVisible = true
+  private floorVisible = true
   private readonly glassMaterial = new MeshStandardMaterial({
     color: new Color('#cfe0ea'),
     side: DoubleSide,
@@ -94,7 +96,11 @@ export class RoomView {
 
   /** Boden und Wände – Ziele für das Farbwerkzeug. */
   get paintables(): Mesh[] {
-    return [this.floor, ...this.wallMeshes, ...(this.ceiling.visible ? [this.ceiling] : [])]
+    return [
+      ...(this.floorVisible ? [this.floor] : []),
+      ...(this.wallsVisible ? this.wallMeshes : []),
+      ...(this.ceiling.visible ? [this.ceiling] : []),
+    ]
   }
 
   update(spec: RoomSpec): void {
@@ -141,10 +147,30 @@ export class RoomView {
   updateVisibility(cameraWorldPosition: Vector3): void {
     const local = this.group.worldToLocal(cameraWorldPosition.clone())
     const inside = local.y < this.height && pointInPolygon({ x: local.x, z: local.z }, this.outline)
-    this.ceiling.visible = local.y < this.height
+    this.ceiling.visible = this.wallsVisible && local.y < this.height
+    this.floor.visible = this.floorVisible
     for (const piece of this.pieces) {
-      piece.group.visible = inside || local.clone().sub(piece.center).dot(piece.normal) <= 0
+      piece.group.visible =
+        this.wallsVisible && (inside || local.clone().sub(piece.center).dot(piece.normal) <= 0)
     }
+  }
+
+  /** Wände (samt Decke) ein- oder ausblenden – in AR meist aus. */
+  setWallsVisible(visible: boolean): void {
+    this.wallsVisible = visible
+  }
+
+  setFloorVisible(visible: boolean): void {
+    this.floorVisible = visible
+    this.floor.visible = visible
+  }
+
+  get wallsShown(): boolean {
+    return this.wallsVisible
+  }
+
+  get floorShown(): boolean {
+    return this.floorVisible
   }
 
   /** Für AR/Passthrough: Wände und Boden halbtransparent darstellen. */

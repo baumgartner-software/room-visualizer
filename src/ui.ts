@@ -8,6 +8,8 @@ import { VIEW_LABELS, type ViewMode } from './views'
 export interface UIOptions {
   store: Store
   editor: Editor
+  roomView: { setWallsVisible: (v: boolean) => void; setFloorVisible: (v: boolean) => void }
+  measure: { undo: () => void; clear: () => void }
   catalog: ElementDef[]
   placeElement: (def: ElementDef) => void
   setView: (mode: ViewMode) => void
@@ -84,10 +86,12 @@ export function setupUI(o: UIOptions): void {
     btn.textContent = TOOL_LABELS[btn.dataset.tool as Tool]
     btn.addEventListener('click', () => editor.setTool(btn.dataset.tool as Tool))
   }
+  const measureSection = $('measure-section')
   const renderTool = (tool: Tool): void => {
     for (const b of toolButtons) b.classList.toggle('active', b.dataset.tool === tool)
-    document.body.classList.toggle('painting', tool === 'paint')
+    document.body.classList.toggle('painting', tool === 'paint' || tool === 'measure')
     document.body.classList.toggle('viewing', tool === 'view')
+    measureSection.hidden = tool !== 'measure'
   }
   editor.addToolListener(renderTool)
   renderTool(editor.tool)
@@ -113,6 +117,13 @@ export function setupUI(o: UIOptions): void {
       store.replace({ version: 2, room: store.room, elements })
     }
   })
+  const showWalls = $<HTMLInputElement>('show-walls')
+  const showFloor = $<HTMLInputElement>('show-floor')
+  showWalls.addEventListener('change', () => o.roomView.setWallsVisible(showWalls.checked))
+  showFloor.addEventListener('change', () => o.roomView.setFloorVisible(showFloor.checked))
+  $('measure-undo').addEventListener('click', () => o.measure.undo())
+  $('measure-clear').addEventListener('click', () => o.measure.clear())
+
   $('room-rect').addEventListener('click', () => {
     store.setRectangularRoom(m($<HTMLInputElement>('room-width').value), m($<HTMLInputElement>('room-depth').value))
   })

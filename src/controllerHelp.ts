@@ -27,6 +27,7 @@ export const MOVE_CONTROLS: ControlHint[] = [
   { key: 'L-Stick', action: 'Gehen und seitlich treten' },
   { key: 'R-Stick ← →', action: 'Um 45° umsehen' },
   { key: 'R-Stick ↑ ↓', action: 'Augenhöhe ändern' },
+  { key: 'A / X', action: 'Zur Wurfkurve teleportieren' },
   { key: 'Trigger', action: 'Anmalen (Werkzeug Farbe)' },
   { key: 'Palette links', action: 'Hinzeigen, R-Stick ↑↓ blättert' },
 ]
@@ -42,7 +43,7 @@ export const DESKTOP_CONTROLS: ControlHint[] = [
   { key: 'E', action: 'Griffe zeigen / Auswahl' },
   { key: 'Kugeln', action: 'Größe ändern (ein Objekt)' },
   { key: 'Pfeile · Platte', action: 'Auswahl verschieben' },
-  { key: 'V · P', action: 'Ansicht · Farbe' },
+  { key: 'V · P · M', action: 'Ansicht · Farbe · Messen' },
   { key: 'R · Entf', action: 'Drehen · löschen' },
 ]
 
@@ -55,7 +56,7 @@ const ACCENT = '#3b82f6'
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 export const HELP_WIDTH = 1000
-export const HELP_HEIGHT = 560
+export const HELP_HEIGHT = 580
 export const HELP_ASPECT = HELP_WIDTH / HELP_HEIGHT
 
 /** Zeichnet die komplette Legende in logischen Einheiten (HELP_WIDTH × HELP_HEIGHT). */
@@ -77,7 +78,7 @@ export function drawControllerHelp(ctx: CanvasRenderingContext2D, title = 'Steue
 
   section(ctx, 'Werkzeug Bearbeiten', EDIT_CONTROLS, 500, 78)
   section(ctx, 'Werkzeug Ansicht & Farbe', MOVE_CONTROLS, 500, 300)
-  section(ctx, 'Immer', ALWAYS_CONTROLS, 500, 486)
+  section(ctx, 'Immer', ALWAYS_CONTROLS, 500, 506)
   ctx.restore()
 }
 

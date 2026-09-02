@@ -18,6 +18,7 @@ import {
   Vector3,
 } from 'three'
 import type { ElementsLayer } from './elements'
+import type { MeasureLayer } from './measure'
 import type { RoomView } from './room'
 import { MIN_ELEMENT_SIZE, snap, type Store } from './store'
 import type { Axis, PlacedElement, Size, Vec3 } from './types'
@@ -26,12 +27,13 @@ import type { Axis, PlacedElement, Size, Vec3 } from './types'
  * Werkzeuge der Anwendung. Das gewählte Werkzeug entscheidet, was ein Klick
  * bzw. der Controller-Trigger auslöst und wofür die Sticks in XR zuständig sind.
  */
-export type Tool = 'view' | 'edit' | 'paint'
+export type Tool = 'view' | 'edit' | 'paint' | 'measure'
 
 export const TOOL_LABELS: Record<Tool, string> = {
   view: 'Ansicht',
   edit: 'Bearbeiten',
   paint: 'Farbe',
+  measure: 'Messen',
 }
 
 /**
@@ -52,6 +54,8 @@ interface HandleInfo {
 
 const AXIS_COLORS: Record<Axis, number> = { x: 0xe3453c, y: 0x3fb950, z: 0x3b82f6 }
 const HOVER_COLOR = new Color(0xffd23f)
+/** Der Griff unter dem Zeiger wächst, damit man beim Ziehen nicht abrutscht. */
+const HOVER_SCALE = 1.75
 const HANDLE_GEOMETRY = new SphereGeometry(1, 20, 14)
 const SHAFT_GEOMETRY = new CylinderGeometry(1, 1, 1, 12)
 const HEAD_GEOMETRY = new ConeGeometry(1, 1, 14)
@@ -116,6 +120,7 @@ export class Editor {
     private readonly store: Store,
     private readonly layer: ElementsLayer,
     private readonly roomView: RoomView,
+    private readonly measure: MeasureLayer,
   ) {
     this.handles.name = 'handles'
     this.handles.visible = false
@@ -234,10 +239,10 @@ export class Editor {
     single?.updateWorldMatrix(true, false)
     this.handles.visible = true
 
-    const r = this.handleRadius
     const quaternion = single ? single.getWorldQuaternion(new Quaternion()) : new Quaternion()
 
     for (const object of this.handles.children) {
+      const r = this.handleRadius * (object === this.hovered ? HOVER_SCALE : 1)
       const info = object.userData.handle as HandleInfo
       // Breite und Tiefe hängen an der Drehung jedes Objekts und sind für eine
       // Gruppe nicht eindeutig; die Höhe dagegen schon.
@@ -279,6 +284,11 @@ export class Editor {
     if (this.tool === 'view') return false
     this.raycaster.ray.copy(ray)
     if (this.tool === 'paint') return this.paint()
+    if (this.tool === 'measure') {
+      const point = this.surfacePoint()
+      if (point) this.measure.addPoint(point)
+      return !!point
+    }
 
     if (this.editPhase === 'transform') {
       // Nur die Griffe reagieren – der Strahl geht durch alles andere hindurch.
@@ -326,6 +336,14 @@ export class Editor {
         this.raycaster.intersectObjects(this.roomView.paintables, false)[0]
       this.outline(hit?.object)
       return hit ? 'paint' : null
+    }
+
+    if (this.tool === 'measure') {
+      this.setHover(null)
+      this.hoverOutline.visible = false
+      const point = this.surfacePoint()
+      this.measure.updatePreview(point)
+      return point ? 'paint' : null
     }
 
     if (this.editPhase === 'transform') {
@@ -380,6 +398,14 @@ export class Editor {
 
   private emitSelection(): void {
     for (const listener of this.selectionListeners) listener([...this.selectedIds], this.editPhase)
+  }
+
+  /** Punkt auf der nächsten Oberfläche – Möbel, Wand oder Boden. */
+  private surfacePoint(): Vector3 | null {
+    const hit =
+      this.raycaster.intersectObjects(this.layer.pickables, false)[0] ??
+      this.raycaster.intersectObjects(this.roomView.paintables, false)[0]
+    return hit ? hit.point.clone() : null
   }
 
   private get activeHandles(): Object3D[] {
@@ -441,10 +467,13 @@ export class Editor {
   }
 
   private setHover(next: Object3D | null): void {
-    if (next === this.hovered) return
+    const root = next ? handleRoot(next) : null
+    if (root === this.hovered) return
     if (this.hovered) applyGizmoColor(this.hovered, false)
-    if (next) applyGizmoColor(next, true)
-    this.hovered = next
+    if (root) applyGizmoColor(root, true)
+    this.hovered = root
+    // Größe des hervorgehobenen Griffs neu setzen.
+    if (this.handles.visible) this.updateHandles()
   }
 
   /** Färbt das getroffene Objekt ein – Element, Wand oder Boden. */
@@ -516,7 +545,8 @@ export class Editor {
       starts,
       sizes0: this.startSizes(),
     }
-    applyGizmoColor(object, true)
+    // Der gezogene Griff bleibt groß, bis man loslässt.
+    this.setHover(object)
     return true
   }
 
@@ -603,6 +633,13 @@ function applyGizmoColor(object: Object3D, hovered: boolean): void {
   const target = (object as Mesh).material as MeshBasicMaterial | undefined
   if (target && 'color' in target) target.color.set(hovered ? HOVER_COLOR : new Color(base))
   for (const child of object.children) applyGizmoColor(child, hovered)
+}
+
+/** Zu einem getroffenen Teil den zugehörigen Griff finden (Pfeile sind Gruppen). */
+function handleRoot(object: Object3D): Object3D {
+  let current: Object3D | null = object
+  while (current && !(current.parent?.name === 'handles')) current = current.parent
+  return current ?? object
 }
 
 function axisVector(info: HandleInfo): Vector3 {

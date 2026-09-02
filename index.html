@@ -16,6 +16,7 @@
         <button data-tool="view" title="Nur ansehen und bewegen">Ansicht</button>
         <button data-tool="edit" class="active" title="Objekte auswählen und ändern">Bearbeiten</button>
         <button data-tool="paint" title="Objekte, Wände und Boden einfärben">Farbe</button>
+        <button data-tool="measure" title="Zwei Punkte antippen, Abstand ablesen">Messen</button>
       </nav>
       <nav class="views" aria-label="Ansicht">
         <button data-view="perspective" class="active">3D</button>
@@ -34,6 +35,8 @@
         <div class="row">
           <button id="room-plan">Grundriss laden</button>
         </div>
+        <label class="check"><input id="show-walls" type="checkbox" checked /> Wände anzeigen</label>
+        <label class="check"><input id="show-floor" type="checkbox" checked /> Boden anzeigen</label>
         <details>
           <summary>Einfacher Rechteck-Raum</summary>
           <div class="row3">
@@ -99,6 +102,17 @@
           Erst auswählen (mit <kbd>Umschalt</kbd> mehrere), dann auf <b>Griffe anzeigen</b> wechseln.
           Objekte lassen sich bewusst nicht direkt wegziehen – dafür sind die Griffe da.
         </p>
+      </section>
+
+      <section id="measure-section" hidden>
+        <h2>Messen</h2>
+        <p class="muted small">
+          Zwei Punkte auf Möbeln, Wänden oder Boden antippen – der Abstand erscheint dazwischen.
+        </p>
+        <div class="row">
+          <button id="measure-undo">Letzte zurücknehmen</button>
+          <button id="measure-clear">Alle löschen</button>
+        </div>
       </section>
 
       <section>

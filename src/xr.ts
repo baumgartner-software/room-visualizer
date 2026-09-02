@@ -1,7 +1,9 @@
 import {
   BufferGeometry,
   CanvasTexture,
+  DoubleSide,
   Quaternion,
+  RingGeometry,
   Color,
   Float32BufferAttribute,
   Group,
@@ -536,6 +538,90 @@ class XRPalette {
   }
 }
 
+/**
+ * Teleport im Werkzeug „Ansicht“: vom rechten Controller wird eine Wurfkurve
+ * zum Boden gezeichnet, am Auftreffpunkt liegt ein leuchtender Ring. Die A-Taste
+ * versetzt den Nutzer dorthin.
+ */
+class XRTeleport {
+  readonly group = new Group()
+  /** Zielpunkt am Boden, oder null wenn die Kurve nichts trifft. */
+  target: Vector3 | null = null
+  private readonly line: Line
+  private readonly ring: Mesh
+  private readonly points: number[] = []
+
+  private static readonly SPEED = 6
+  private static readonly GRAVITY = -9.81
+  private static readonly STEPS = 48
+  private static readonly STEP_TIME = 0.035
+
+  constructor() {
+    this.group.name = 'xr-teleport'
+    this.group.visible = false
+
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(XRTeleport.STEPS * 3), 3))
+    this.line = new Line(geometry, new LineBasicMaterial({ color: 0x8fd0ff, transparent: true, opacity: 0.9 }))
+    this.line.raycast = () => undefined
+    this.line.frustumCulled = false
+
+    this.ring = new Mesh(
+      new RingGeometry(0.16, 0.26, 40),
+      new MeshBasicMaterial({ color: 0x8fd0ff, transparent: true, opacity: 0.75, side: DoubleSide }),
+    )
+    this.ring.rotation.x = -Math.PI / 2
+    this.ring.raycast = () => undefined
+    this.group.add(this.line, this.ring)
+  }
+
+  hide(): void {
+    this.group.visible = false
+    this.target = null
+  }
+
+  /** Wurfparabel ab dem Controller, bis sie den Boden schneidet. */
+  update(origin: Vector3, direction: Vector3, floorY: number): void {
+    this.points.length = 0
+    const velocity = direction.clone().normalize().multiplyScalar(XRTeleport.SPEED)
+    const point = origin.clone()
+    let hit: Vector3 | null = null
+
+    for (let i = 0; i < XRTeleport.STEPS; i++) {
+      this.points.push(point.x, point.y, point.z)
+      const t = XRTeleport.STEP_TIME
+      const next = point.clone()
+      next.addScaledVector(velocity, t)
+      next.y += 0.5 * XRTeleport.GRAVITY * t * t
+      velocity.y += XRTeleport.GRAVITY * t
+      if (next.y <= floorY) {
+        // Anteil bis zum Boden linear interpolieren.
+        const f = (point.y - floorY) / Math.max(1e-6, point.y - next.y)
+        hit = point.clone().lerp(next, f)
+        hit.y = floorY
+        this.points.push(hit.x, hit.y, hit.z)
+        break
+      }
+      point.copy(next)
+    }
+
+    this.target = hit
+    this.group.visible = !!hit
+    if (!hit) return
+
+    // Restliche Stützstellen auf den Auftreffpunkt legen, damit die Linie endet.
+    const attribute = this.line.geometry.getAttribute('position')
+    const used = this.points.length / 3
+    for (let i = 0; i < XRTeleport.STEPS; i++) {
+      const index = Math.min(i, used - 1) * 3
+      attribute.setXYZ(i, this.points[index], this.points[index + 1], this.points[index + 2])
+    }
+    attribute.needsUpdate = true
+    this.line.geometry.computeBoundingSphere()
+    this.ring.position.copy(hit).setY(floorY + 0.01)
+  }
+}
+
 export interface XRManagerOptions {
   renderer: WebGLRenderer
   scene: Scene
@@ -558,6 +644,7 @@ export class XRManager {
   readonly menu: XRMenu
   private readonly hud: XRHud
   private readonly palette = new XRPalette()
+  private readonly teleport = new XRTeleport()
   /** Zeigt der rechte Controller gerade auf die Palette? */
   private overPalette = false
   private readonly controllers: Group[] = []
@@ -585,7 +672,7 @@ export class XRManager {
       onClear: () => o.editor.clearSelection(),
       onCloseHelp: () => this.setHelpVisible(false),
     })
-    o.scene.add(this.menu.group, this.hud.group)
+    o.scene.add(this.menu.group, this.hud.group, this.teleport.group)
     o.editor.addToolListener((tool) => {
       this.hud.setToolLabel(TOOL_LABELS[tool])
       this.palette.setVisible(tool === 'paint')
@@ -664,6 +751,11 @@ export class XRManager {
     const blend = this.o.renderer.xr.getSession()?.environmentBlendMode
     const transparent = this.isAR || (blend !== undefined && blend !== 'opaque')
     this.o.roomView.setTransparent(transparent)
+    // In AR stören die Wände – dort zählen Möbel und Boden.
+    if (transparent) {
+      this.o.roomView.setWallsVisible(false)
+      this.menu.setLabel('walls', 'Wände: aus')
+    }
     this.o.editor.setHandleRadius(0.025)
     // Das Menü bleibt zu – es kommt über die Leiste oder die Griff-Taste.
     this.needsMenuPlacement = false
@@ -679,8 +771,11 @@ export class XRManager {
 
   private onSessionEnd(): void {
     this.o.roomView.setTransparent(false)
+    this.o.roomView.setWallsVisible(true)
+    this.menu.setLabel('walls', 'Wände: an')
     this.hud.setVisible(false)
     this.menu.hide()
+    this.teleport.hide()
     this.o.player.position.set(0, 0, 0)
     this.o.player.quaternion.identity()
     this.activeController = null
@@ -775,6 +870,8 @@ export class XRManager {
     }
     this.readGamepads(camPosition, camQuaternion)
 
+    this.updateTeleport()
+
     let menuHover: Mesh | null = null
     let paletteHover: Mesh | null = null
     for (const controller of this.controllers) {
@@ -840,7 +937,7 @@ export class XRManager {
   }
 
   private cycleTool(): void {
-    const order: Tool[] = ['view', 'edit', 'paint']
+    const order: Tool[] = ['view', 'edit', 'paint', 'measure']
     const next = order[(order.indexOf(this.o.editor.tool) + 1) % order.length]
     this.o.editor.setTool(next)
     this.hud.setToolLabel(TOOL_LABELS[next])
@@ -955,7 +1052,10 @@ export class XRManager {
       state.stick = stickPressed
 
       const a = pad.buttons[4]?.pressed ?? false
-      if (a && !state.a && canEditSelection) this.duplicateSelection()
+      if (a && !state.a) {
+        if (editor.tool === 'view') this.teleportToTarget()
+        else if (canEditSelection) this.duplicateSelection()
+      }
       state.a = a
 
       const b = pad.buttons[5]?.pressed ?? false
@@ -964,6 +1064,36 @@ export class XRManager {
       }
       state.b = b
     }
+  }
+
+  /** Wurfkurve nur im Werkzeug „Ansicht“, gezeichnet vom rechten Controller. */
+  private updateTeleport(): void {
+    if (this.o.editor.tool !== 'view') {
+      this.teleport.hide()
+      return
+    }
+    const controller = this.rightController
+    if (!controller) {
+      this.teleport.hide()
+      return
+    }
+    const ray = this.rayFrom(controller, this.tmpRay)
+    this.teleport.update(ray.origin.clone(), ray.direction.clone(), 0)
+  }
+
+  private get rightController(): Group | undefined {
+    return this.controllers.find(
+      (c) => (c.userData.inputSource as XRInputSource | null)?.handedness === 'right',
+    )
+  }
+
+  /** Versetzt das Rig so, dass der Kopf über dem Zielpunkt steht. */
+  private teleportToTarget(): void {
+    const target = this.teleport.target
+    if (!target) return
+    this.readHead()
+    this.o.player.position.x += target.x - this.headPosition.x
+    this.o.player.position.z += target.z - this.headPosition.z
   }
 
   private pointsAtPalette(controller: Group): boolean {
@@ -998,6 +1128,7 @@ export class XRManager {
 
   private buildMenu(): XRMenuPage[] {
     const { store, editor, catalog } = this.o
+    const o = this.o
 
     const elementRows: XRMenuRow[] = []
     for (let i = 0; i < catalog.length; i += 2) {
@@ -1040,6 +1171,37 @@ export class XRManager {
             buttons: [
               { id: 'tool-view', label: 'Ansicht (gehen)', action: () => this.setTool('view') },
               { id: 'tool-edit', label: 'Bearbeiten', action: () => this.setTool('edit') },
+            ],
+          },
+          {
+            kind: 'buttons',
+            buttons: [
+              { id: 'tool-paint', label: 'Farbe', action: () => this.setTool('paint') },
+              { id: 'tool-measure', label: 'Messen', action: () => this.setTool('measure') },
+            ],
+          },
+          { kind: 'title', text: 'Anzeigen' },
+          {
+            kind: 'buttons',
+            buttons: [
+              {
+                id: 'walls',
+                label: 'Wände: an',
+                action: () => {
+                  const show = !o.roomView.wallsShown
+                  o.roomView.setWallsVisible(show)
+                  this.menu.setLabel('walls', show ? 'Wände: an' : 'Wände: aus')
+                },
+              },
+              {
+                id: 'floor',
+                label: 'Boden: an',
+                action: () => {
+                  const show = !o.roomView.floorShown
+                  o.roomView.setFloorVisible(show)
+                  this.menu.setLabel('floor', show ? 'Boden: an' : 'Boden: aus')
+                },
+              },
             ],
           },
           { kind: 'title', text: 'Raum (Griff-Taste holt das Menü)' },

@@ -98,9 +98,19 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   Spülen-, Herdumbauschrank, Hängeschrank, Aufsatzschrank, Hochschrank,
   Kühlschrank), Arbeitsplatte, Kochinsel, Kochfeld, Spülbecken, Backofen,
   Dunstabzugshaube und Rückwand.
-- **Werkzeuge**: *Ansicht* (nur umsehen und in XR umhergehen), *Bearbeiten*
-  (Objekte auswählen und ändern) und *Farbe* (Pinsel). Das aktive Werkzeug steht
-  in der Kopfzeile und in XR auf der Leiste unten rechts.
+- **Werkzeuge**: *Ansicht* (umsehen, in XR gehen und teleportieren), *Bearbeiten*
+  (Objekte auswählen und ändern), *Farbe* (Pinsel) und *Messen*. Das aktive
+  Werkzeug steht in der Kopfzeile und in XR auf der Leiste unten rechts.
+- **Messen**: zwei Punkte auf Möbeln, Wänden oder Boden antippen – dazwischen
+  erscheinen eine Linie und der Abstand in Zentimetern. Messungen gehören nicht
+  zum Projekt und lassen sich einzeln zurücknehmen oder ganz löschen.
+- **Teleport** (XR, Werkzeug *Ansicht*): vom rechten Controller läuft eine
+  Wurfkurve zum Boden, am Auftreffpunkt liegt ein leuchtender Ring. *A/X*
+  versetzt dich dorthin – nützlich, weil die Guardian-Grenze der Quest das
+  Zufußgehen über die eigene Spielfläche hinaus ohnehin unterbricht.
+- **Wände und Boden ein-/ausblenden**: im Panel und im VR-Menü unter *Raum*.
+  In AR (Passthrough) sind die Wände automatisch aus, damit nur Möbel und Boden
+  im echten Zimmer stehen.
 - **Zwei Schritte im Werkzeug *Bearbeiten***: erst **auswählen** – ein Klick bzw.
   Trigger sammelt Objekte ein (am Desktop mit <kbd>Umschalt</kbd> mehrere, in XR
   jeder Trigger-Druck) –, dann über *Griffe anzeigen* in den **Griff-Schritt**
@@ -118,7 +128,8 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   *Spiegeln*, womit Griff und Anschlag der Front die Seite wechseln. Alles wirkt
   auf die gesamte Auswahl.
 - **Hover-Rahmen**: Das Objekt unter dem Mauszeiger bzw. dem Controller-Strahl
-  bekommt einen gelben Rahmen – auch Wände und Boden im Werkzeug *Farbe*.
+  bekommt einen gelben Rahmen – auch Wände und Boden im Werkzeug *Farbe*. Griffe
+  wachsen unter dem Zeiger auf 175 %, damit man beim Ziehen nicht abrutscht.
 - **Umgebung**: Rasenfläche und Himmelskuppel rund um das Haus, sichtbar durch
   die Terrassentüren.
 - **Farbwerkzeug**: Farbe aus der Palette (oder eigene Farbe) wählen und
@@ -155,11 +166,11 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | | |
 | --- | --- |
 | Maus | Klick = auswählen · <kbd>Umschalt</kbd>+Klick = weitere hinzunehmen · Griffe ziehen = bewegen und aufziehen · rechte Taste = schwenken |
-| Tastatur | `E` Griffe zeigen / zurück zur Auswahl · `R` drehen · `Entf` löschen · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
+| Tastatur | `E` Griffe zeigen / zurück zur Auswahl · `R` drehen · `Entf` löschen · `V` Ansicht · `P` Farbe · `M` Messen · `Esc` zurück zu *Bearbeiten* |
 | Quest 3 · immer | Trigger = Objekte auswählen · linken Stick drücken = Menü auf/zu · Leiste unten rechts = Menü · Werkzeug · Griffe zeigen · Auswahl aufheben |
 | Quest 3 · Bearbeiten, Auswahl-Schritt | Sticks bewegen dich wie im Werkzeug *Ansicht* · A/X = duplizieren · B/Y = löschen |
 | Quest 3 · Bearbeiten, Griff-Schritt | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) – alles auf die gesamte Auswahl |
-| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe · auf die Palette am linken Controller zeigen: ↑↓ blättert |
+| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe · A/X = zur Wurfkurve teleportieren · auf die Palette am linken Controller zeigen: ↑↓ blättert |
 
 ### URL-Parameter
 
@@ -206,6 +217,7 @@ im Quest-Browser, `localhost` gilt als sicherer Kontext).
 | `src/share.ts` | Zustand ⇄ komprimiertes URL-Fragment |
 | `src/controllerHelp.ts` | Controller-Legende als SVG – im Panel und als XR-Tafel |
 | `src/environment.ts` | Rasen und Himmel außerhalb des Hauses |
+| `src/measure.ts` | Messlinien mit Abstandsbeschriftung |
 | `scripts/screenshot.mjs` | Headless-Rendering für die README-Bilder |
 
 Alle Maße intern in **Metern**, die Oberfläche zeigt Zentimeter. Der
