@@ -1,5 +1,6 @@
 import { Color, Group, Mesh, MeshBasicMaterial, Plane, Quaternion, Ray, Raycaster, SphereGeometry, Vector3 } from 'three'
 import type { ElementsLayer } from './elements'
+import type { RoomView } from './room'
 import { MIN_ELEMENT_SIZE, snap, type Store } from './store'
 import type { Axis, PlacedElement } from './types'
 
@@ -30,7 +31,7 @@ interface MoveDrag {
   pos0: PlacedElement['position']
 }
 
-export type HoverKind = 'handle' | 'element' | null
+export type HoverKind = 'handle' | 'element' | 'paint' | null
 
 /**
  * Auswahl-, Verschiebe- und Größenänderungslogik. Arbeitet ausschließlich mit
@@ -42,7 +43,10 @@ export class Editor {
   readonly handles = new Group()
   selectedId: string | null = null
   editMode = true
+  /** Ist eine Farbe gewählt, färbt ein Klick das getroffene Objekt ein. */
+  paintColor: string | null = null
   onSelectionChange?: (id: string | null) => void
+  onPaintModeChange?: (color: string | null) => void
 
   private readonly handleMeshes: Mesh[] = []
   private drag: HandleDrag | MoveDrag | null = null
@@ -54,6 +58,7 @@ export class Editor {
   constructor(
     private readonly store: Store,
     private readonly layer: ElementsLayer,
+    private readonly roomView: RoomView,
   ) {
     this.handles.name = 'handles'
     this.handles.visible = false
@@ -93,6 +98,35 @@ export class Editor {
     this.updateHandles()
   }
 
+  /** `null` beendet den Pinsel-Modus. */
+  setPaintColor(color: string | null): void {
+    this.paintColor = color
+    this.onPaintModeChange?.(color)
+  }
+
+  /**
+   * Färbt das getroffene Objekt ein – Element, Wand oder Boden.
+   * @returns true, wenn etwas eingefärbt wurde.
+   */
+  private paint(ray: Ray): boolean {
+    const color = this.paintColor
+    if (!color) return false
+    this.raycaster.ray.copy(ray)
+    const elHit = this.raycaster.intersectObjects(this.layer.pickables, false)[0]
+    if (elHit) {
+      this.store.updateElement(elHit.object.userData.elementId as string, { color })
+      return true
+    }
+    const roomHit = this.raycaster.intersectObjects(this.roomView.paintables, false)[0]
+    if (roomHit) {
+      const part = roomHit.object.userData.roomPart as 'floor' | 'wall' | undefined
+      if (part === 'floor') this.store.setRoomColors({ floorColor: color })
+      else if (part === 'wall') this.store.setRoomColors({ wallColor: color })
+      return !!part
+    }
+    return false
+  }
+
   /** Griffe einzelner Achsen ausblenden (z. B. Y in der 2D-Draufsicht). */
   setHiddenAxes(axes: Axis[]): void {
     this.hiddenAxes = new Set(axes)
@@ -130,6 +164,7 @@ export class Editor {
 
   /** @returns true, wenn der Strahl einen Griff oder ein Element getroffen hat (Drag gestartet). */
   pointerDown(ray: Ray): boolean {
+    if (this.paintColor) return this.paint(ray)
     this.raycaster.ray.copy(ray)
     const mesh = this.layer.getMesh(this.selectedId)
 
@@ -181,6 +216,17 @@ export class Editor {
   hover(ray: Ray | null): HoverKind {
     let next: Mesh | null = null
     let kind: HoverKind = null
+    if (ray && this.paintColor) {
+      this.raycaster.ray.copy(ray)
+      const hit =
+        this.raycaster.intersectObjects(this.layer.pickables, false).length > 0 ||
+        this.raycaster.intersectObjects(this.roomView.paintables, false).length > 0
+      if (this.hovered) {
+        this.applyHandleColor(this.hovered, false)
+        this.hovered = null
+      }
+      return hit ? 'paint' : null
+    }
     if (ray) {
       this.raycaster.ray.copy(ray)
       if (this.handles.visible) {

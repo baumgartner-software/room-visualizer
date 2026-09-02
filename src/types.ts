@@ -11,11 +11,47 @@ export interface Vec3 {
   z: number
 }
 
-/** Raumdefinition: Breite (x), Tiefe/Länge (z), Höhe (y). */
-export interface RoomSpec {
+/** Punkt im Grundriss: x nach Osten, z nach Süden. */
+export interface Vec2 {
+  x: number
+  z: number
+}
+
+/** Fenster- oder Türöffnung entlang einer Wand. */
+export interface OpeningSpec {
+  /** Abstand vom Startpunkt (a) der Wand. */
+  start: number
   width: number
-  depth: number
+  /** Unterkante über dem Boden (0 = Tür/Durchgang). */
+  sill: number
+  /** Oberkante über dem Boden. */
+  top: number
+}
+
+export interface WallSpec {
+  a: Vec2
+  b: Vec2
+  thickness: number
+  openings?: OpeningSpec[]
+  /**
+   * Außenwände liegen mit ihrer Innenkante auf dem Grundriss-Polygon und werden
+   * ausgeblendet, wenn sie zwischen Kamera und Raum stehen (Puppenhaus-Ansicht).
+   */
+  exterior?: boolean
+}
+
+/**
+ * Raum als Grundriss-Polygon statt einfacher Box – damit lassen sich auch
+ * L-Formen und einzelne Innenwände abbilden.
+ */
+export interface RoomSpec {
+  name: string
   height: number
+  /** Innenkante des Grundrisses im Uhrzeigersinn (x nach Osten, z nach Süden). */
+  outline: Vec2[]
+  walls: WallSpec[]
+  wallColor: string
+  floorColor: string
 }
 
 /** Ein Element aus dem Katalog (Vorlage). */
@@ -32,8 +68,7 @@ export interface ElementDef {
 
 /**
  * Ein im Raum platziertes Element.
- * `position` ist der Mittelpunkt der Unterkante (x/z = Mitte, y = Unterkante)
- * in Raumkoordinaten (Ursprung = linke vordere Bodenecke).
+ * `position` ist der Mittelpunkt der Unterkante (x/z = Mitte, y = Unterkante).
  */
 export interface PlacedElement {
   id: string
@@ -47,9 +82,20 @@ export interface PlacedElement {
 }
 
 export interface ProjectState {
-  version: 1
+  version: 2
   room: RoomSpec
   elements: PlacedElement[]
+}
+
+export interface Bounds {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+  width: number
+  depth: number
+  centerX: number
+  centerZ: number
 }
 
 export type Axis = 'x' | 'y' | 'z'

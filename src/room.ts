@@ -1,81 +1,234 @@
 import {
-  BackSide,
-  BufferGeometry,
   BoxGeometry,
+  CanvasTexture,
   Color,
   DoubleSide,
-  Float32BufferAttribute,
   Group,
-  LineBasicMaterial,
-  LineSegments,
   Mesh,
   MeshStandardMaterial,
-  PlaneGeometry,
+  RepeatWrapping,
+  Shape,
+  ShapeGeometry,
+  SRGBColorSpace,
+  Vector3,
 } from 'three'
-import type { RoomSpec } from './types'
+import { centroid, outwardNormal, pointInPolygon } from './geometry'
+import type { OpeningSpec, RoomSpec, WallSpec } from './types'
+
+interface WallPiece {
+  group: Group
+  /** Nach außen zeigende Normale (für die Puppenhaus-Ansicht). */
+  normal: Vector3
+  center: Vector3
+  exterior: boolean
+}
 
 /**
- * Darstellung des Raumes. Die Wände sind ein von innen sichtbarer Quader
- * (BackSide), sodass man von außen (3D/Iso/2D) hineinschauen kann und in VR
- * von innen die Wände sieht. Koordinatenursprung = linke vordere Bodenecke.
+ * Raumdarstellung aus einem Grundriss-Polygon: Boden als Polygonfläche, Wände
+ * als einzelne Quader mit ausgesparten Fenstern und Türen.
+ *
+ * Außenwände, die zwischen Kamera und Raum stehen, werden ausgeblendet
+ * (Puppenhaus-Ansicht). In XR steht man im Raum, dort bleiben alle Wände
+ * sichtbar – das ergibt sich automatisch aus derselben Regel.
  */
 export class RoomView {
   readonly group = new Group()
   readonly floor: Mesh
-  private shell: Mesh
-  private grid: LineSegments
-  private readonly shellMaterial = new MeshStandardMaterial({
-    color: new Color('#ebe6dd'),
-    side: BackSide,
+  readonly ceiling: Mesh
+  private wallGroup = new Group()
+  private pieces: WallPiece[] = []
+  private wallMeshes: Mesh[] = []
+  private readonly wallMaterial = new MeshStandardMaterial({
+    color: new Color('#efeae2'),
+    side: DoubleSide,
     roughness: 0.95,
     transparent: true,
     opacity: 1,
   })
-  private readonly floorMaterial = new MeshStandardMaterial({
-    color: new Color('#c9c2b6'),
+  private readonly floorMaterial: MeshStandardMaterial
+  /**
+   * Die Decke wird nur von unten gesehen; ohne Eigenleuchten bliebe sie im
+   * Schatten der Lichter, die alle von oben kommen.
+   */
+  private readonly ceilingMaterial = new MeshStandardMaterial({
+    color: new Color('#efeae2'),
     side: DoubleSide,
-    roughness: 0.9,
-    transparent: true,
-    opacity: 1,
+    roughness: 1,
+    emissiveIntensity: 0.5,
   })
-  private readonly gridMaterial = new LineBasicMaterial({ color: 0x8a8378, transparent: true, opacity: 0.45 })
+  private height = 2.5
+  private outline: import('./types').Vec2[] = []
 
   constructor(spec: RoomSpec) {
-    this.shell = new Mesh(new BoxGeometry(1, 1, 1), this.shellMaterial)
-    this.shell.name = 'room-shell'
-    this.floor = new Mesh(new PlaneGeometry(1, 1), this.floorMaterial)
+    this.floorMaterial = new MeshStandardMaterial({
+      color: new Color(spec.floorColor),
+      map: makeGridTexture(),
+      side: DoubleSide,
+      roughness: 0.85,
+      transparent: true,
+      opacity: 1,
+    })
+    this.floor = new Mesh(new ShapeGeometry(new Shape()), this.floorMaterial)
     this.floor.name = 'room-floor'
     this.floor.rotation.x = -Math.PI / 2
-    this.floor.userData.isFloor = true
-    this.grid = new LineSegments(new BufferGeometry(), this.gridMaterial)
-    this.grid.name = 'room-grid'
-    this.group.add(this.shell, this.floor, this.grid)
+    this.floor.userData.roomPart = 'floor'
+    this.ceiling = new Mesh(new ShapeGeometry(new Shape()), this.ceilingMaterial)
+    this.ceiling.name = 'room-ceiling'
+    this.ceiling.rotation.x = -Math.PI / 2
+    this.ceiling.userData.roomPart = 'wall'
+    this.group.add(this.floor, this.ceiling, this.wallGroup)
     this.update(spec)
   }
 
+  /** Boden und Wände – Ziele für das Farbwerkzeug. */
+  get paintables(): Mesh[] {
+    return [this.floor, ...this.wallMeshes, ...(this.ceiling.visible ? [this.ceiling] : [])]
+  }
+
   update(spec: RoomSpec): void {
-    const { width: w, depth: d, height: h } = spec
-    this.shell.scale.set(w, h, d)
-    this.shell.position.set(w / 2, h / 2, d / 2)
-    this.floor.scale.set(w, d, 1)
-    this.floor.position.set(w / 2, 0.002, d / 2)
-    this.grid.geometry.dispose()
-    this.grid.geometry = makeGridGeometry(w, d, 0.5)
-    this.grid.position.y = 0.004
+    this.wallMaterial.color.set(spec.wallColor)
+    this.ceilingMaterial.color.set(spec.wallColor)
+    this.ceilingMaterial.emissive.set(spec.wallColor)
+    this.floorMaterial.color.set(spec.floorColor)
+
+    // Boden: Polygon in der xz-Ebene (Shape-y entspricht -z).
+    const shape = new Shape(spec.outline.map((p) => ({ x: p.x, y: -p.z })) as never)
+    this.floor.geometry.dispose()
+    this.floor.geometry = new ShapeGeometry(shape)
+    this.floor.position.y = 0
+    this.ceiling.geometry.dispose()
+    this.ceiling.geometry = new ShapeGeometry(shape)
+    this.ceiling.position.y = spec.height
+    this.height = spec.height
+    this.outline = spec.outline
+
+    for (const piece of this.pieces) {
+      piece.group.traverse((o) => {
+        if (o instanceof Mesh) o.geometry.dispose()
+      })
+      this.wallGroup.remove(piece.group)
+    }
+    this.pieces = []
+    this.wallMeshes = []
+
+    const center = centroid(spec.outline)
+    for (const wall of spec.walls) {
+      const piece = this.buildWall(wall, spec, center)
+      if (piece) {
+        this.pieces.push(piece)
+        this.wallGroup.add(piece.group)
+      }
+    }
+  }
+
+  /**
+   * Puppenhaus-Ansicht: steht die Kamera außerhalb des Raums, werden die Wände
+   * zwischen Kamera und Raum ausgeblendet. Steht man im Raum (XR, Rundgang),
+   * bleiben alle Wände stehen.
+   */
+  updateVisibility(cameraWorldPosition: Vector3): void {
+    const local = this.group.worldToLocal(cameraWorldPosition.clone())
+    const inside = local.y < this.height && pointInPolygon({ x: local.x, z: local.z }, this.outline)
+    this.ceiling.visible = local.y < this.height
+    for (const piece of this.pieces) {
+      piece.group.visible = inside || local.clone().sub(piece.center).dot(piece.normal) <= 0
+    }
   }
 
   /** Für AR/Passthrough: Wände und Boden halbtransparent darstellen. */
   setTransparent(transparent: boolean): void {
-    this.shellMaterial.opacity = transparent ? 0.25 : 1
-    this.floorMaterial.opacity = transparent ? 0.35 : 1
+    this.wallMaterial.opacity = transparent ? 0.2 : 1
+    this.floorMaterial.opacity = transparent ? 0.3 : 1
+    this.ceilingMaterial.transparent = transparent
+    this.ceilingMaterial.opacity = transparent ? 0.15 : 1
+  }
+
+  private buildWall(wall: WallSpec, spec: RoomSpec, center: { x: number; z: number }): WallPiece | null {
+    const dx = wall.b.x - wall.a.x
+    const dz = wall.b.z - wall.a.z
+    const length = Math.hypot(dx, dz)
+    if (length < 1e-4) return null
+
+    const dir = { x: dx / length, z: dz / length }
+    const n = outwardNormal(wall, center)
+    // Außenwände liegen mit der Innenkante auf dem Polygon, wachsen also nach außen.
+    const offset = wall.exterior ? wall.thickness / 2 : 0
+    const angle = Math.atan2(-dir.z, dir.x)
+
+    const group = new Group()
+    group.name = 'wall'
+    for (const box of wallBoxes(length, spec.height, wall.openings ?? [])) {
+      const geo = new BoxGeometry(box.length, box.height, wall.thickness)
+      const mesh = new Mesh(geo, this.wallMaterial)
+      mesh.userData.roomPart = 'wall'
+      const along = box.start + box.length / 2
+      mesh.position.set(
+        wall.a.x + dir.x * along + n.x * offset,
+        box.bottom + box.height / 2,
+        wall.a.z + dir.z * along + n.z * offset,
+      )
+      mesh.rotation.y = angle
+      group.add(mesh)
+      this.wallMeshes.push(mesh)
+    }
+
+    return {
+      group,
+      normal: new Vector3(n.x, 0, n.z),
+      center: new Vector3(wall.a.x + dir.x * (length / 2), spec.height / 2, wall.a.z + dir.z * (length / 2)),
+      exterior: !!wall.exterior,
+    }
   }
 }
 
-function makeGridGeometry(w: number, d: number, step: number): BufferGeometry {
-  const verts: number[] = []
-  for (let x = 0; x <= w + 1e-6; x += step) verts.push(x, 0, 0, x, 0, d)
-  for (let z = 0; z <= d + 1e-6; z += step) verts.push(0, 0, z, w, 0, z)
-  const geo = new BufferGeometry()
-  geo.setAttribute('position', new Float32BufferAttribute(verts, 3))
-  return geo
+interface WallBox {
+  start: number
+  length: number
+  bottom: number
+  height: number
+}
+
+/**
+ * Zerlegt eine Wand in Quader: volle Stücke zwischen den Öffnungen, dazu
+ * Brüstung und Sturz an jeder Öffnung.
+ */
+function wallBoxes(length: number, height: number, openings: OpeningSpec[]): WallBox[] {
+  const boxes: WallBox[] = []
+  const sorted = [...openings].sort((a, b) => a.start - b.start)
+  let cursor = 0
+  for (const o of sorted) {
+    const start = Math.max(0, Math.min(o.start, length))
+    const end = Math.max(start, Math.min(o.start + o.width, length))
+    if (start > cursor + 1e-4) {
+      boxes.push({ start: cursor, length: start - cursor, bottom: 0, height })
+    }
+    if (o.sill > 1e-4) boxes.push({ start, length: end - start, bottom: 0, height: o.sill })
+    if (o.top < height - 1e-4) {
+      boxes.push({ start, length: end - start, bottom: o.top, height: height - o.top })
+    }
+    cursor = Math.max(cursor, end)
+  }
+  if (cursor < length - 1e-4) boxes.push({ start: cursor, length: length - cursor, bottom: 0, height })
+  return boxes.filter((b) => b.length > 1e-4 && b.height > 1e-4)
+}
+
+/** Dezentes 50-cm-Raster als Bodentextur (die UV entspricht den Metern). */
+function makeGridTexture(): CanvasTexture {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, size, size)
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.09)'
+  ctx.lineWidth = 2
+  ctx.strokeRect(0, 0, size, size)
+  const tex = new CanvasTexture(canvas)
+  tex.colorSpace = SRGBColorSpace
+  tex.wrapS = RepeatWrapping
+  tex.wrapT = RepeatWrapping
+  tex.repeat.set(2, 2) // eine Kachel = 50 cm
+  tex.anisotropy = 4
+  return tex
 }

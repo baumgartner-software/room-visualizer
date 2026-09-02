@@ -266,3 +266,53 @@ kbd {
     transform: translateY(100%);
   }
 }
+
+/* --- Farbpalette ---------------------------------------------------------- */
+#palette {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.swatch-btn {
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: 6px;
+  border: 2px solid var(--panel-border);
+  cursor: pointer;
+}
+
+.swatch-btn:hover {
+  border-color: var(--muted);
+}
+
+.swatch-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+
+label.grow {
+  flex: 1 1 auto;
+}
+
+details {
+  margin-top: 8px;
+}
+
+summary {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+body.painting #scene {
+  cursor: crosshair;
+}
+
+/* --- Ansicht ohne Bedienelemente (?ui=0) ---------------------------------- */
+body.no-ui #topbar,
+body.no-ui #panel {
+  display: none;
+}

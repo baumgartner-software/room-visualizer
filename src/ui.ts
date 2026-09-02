@@ -1,4 +1,5 @@
 import type { Editor } from './editor'
+import { bounds } from './geometry'
 import type { Store } from './store'
 import type { ElementDef, PlacedElement, ProjectState } from './types'
 import { VIEW_LABELS, type ViewMode } from './views'
@@ -10,6 +11,22 @@ export interface UIOptions {
   placeElement: (def: ElementDef) => void
   setView: (mode: ViewMode) => void
 }
+
+/** Farbpalette des Pinsel-Werkzeugs. */
+export const PALETTE: { color: string; name: string }[] = [
+  { color: '#ffffff', name: 'Weiß' },
+  { color: '#f2efe8', name: 'Creme' },
+  { color: '#ded7cc', name: 'Sand' },
+  { color: '#b9b3a8', name: 'Graubeige' },
+  { color: '#7d7f83', name: 'Grau' },
+  { color: '#1e1f22', name: 'Schwarz' },
+  { color: '#c9a063', name: 'Eiche' },
+  { color: '#8a5a34', name: 'Nussbaum' },
+  { color: '#d8bd99', name: 'Heller Holzboden' },
+  { color: '#3f5d4a', name: 'Salbeigrün' },
+  { color: '#2f4f6f', name: 'Petrolblau' },
+  { color: '#7a2f2f', name: 'Bordeaux' },
+]
 
 const cm = (m: number): string => String(Math.round(m * 100))
 const m = (cmValue: string | number): number => Number(cmValue) / 100
@@ -24,7 +41,6 @@ function $<T extends HTMLElement>(id: string): T {
 export function setupUI(o: UIOptions): void {
   const { store, editor, catalog } = o
 
-  // --- Panel ein-/ausblenden -------------------------------------------------
   const panel = $('panel')
   $('toggle-panel').addEventListener('click', () => panel.classList.toggle('collapsed'))
 
@@ -40,13 +56,44 @@ export function setupUI(o: UIOptions): void {
   }
 
   // --- Raum ------------------------------------------------------------------
-  const roomInputs = {
-    width: $<HTMLInputElement>('room-width'),
-    depth: $<HTMLInputElement>('room-depth'),
-    height: $<HTMLInputElement>('room-height'),
+  const roomHeight = $<HTMLInputElement>('room-height')
+  roomHeight.addEventListener('change', () => store.setRoomHeight(m(roomHeight.value)))
+  $('room-plan').addEventListener('click', () => {
+    if (confirm('Grundriss aus dem Bauplan laden? Platzierte Elemente bleiben erhalten.')) {
+      const elements = store.state.elements
+      store.reset()
+      store.replace({ version: 2, room: store.room, elements })
+    }
+  })
+  $('room-rect').addEventListener('click', () => {
+    store.setRectangularRoom(m($<HTMLInputElement>('room-width').value), m($<HTMLInputElement>('room-depth').value))
+  })
+
+  // --- Farbpalette -----------------------------------------------------------
+  const paletteEl = $('palette')
+  const customColor = $<HTMLInputElement>('paint-color')
+  const paintToggle = $<HTMLButtonElement>('paint-toggle')
+  const swatches = new Map<string, HTMLButtonElement>()
+  for (const { color, name } of PALETTE) {
+    const btn = document.createElement('button')
+    btn.className = 'swatch-btn'
+    btn.style.background = color
+    btn.title = `${name} – als Pinselfarbe wählen`
+    btn.setAttribute('aria-label', name)
+    btn.addEventListener('click', () => editor.setPaintColor(color))
+    swatches.set(color, btn)
+    paletteEl.appendChild(btn)
   }
-  for (const [key, input] of Object.entries(roomInputs)) {
-    input.addEventListener('change', () => store.setRoom({ [key]: m(input.value) }))
+  customColor.addEventListener('input', () => editor.setPaintColor(customColor.value))
+  paintToggle.addEventListener('click', () => {
+    editor.setPaintColor(editor.paintColor ? null : customColor.value)
+  })
+  editor.onPaintModeChange = (color) => {
+    paintToggle.textContent = color ? `Pinsel an (${color})` : 'Pinsel aus'
+    paintToggle.classList.toggle('active', !!color)
+    document.body.classList.toggle('painting', !!color)
+    for (const [c, btn] of swatches) btn.classList.toggle('active', c === color)
+    if (color) customColor.value = color
   }
 
   // --- Katalog ---------------------------------------------------------------
@@ -54,7 +101,8 @@ export function setupUI(o: UIOptions): void {
   for (const def of catalog) {
     const btn = document.createElement('button')
     btn.className = 'catalog-item'
-    btn.innerHTML = `<span class="swatch" style="background:${def.color}"></span><span class="label">${def.name}</span><span class="dims">${cm(def.size.w)}×${cm(def.size.h)}×${cm(def.size.d)}</span>`
+    btn.innerHTML = `<span class="swatch" style="background:${def.color}"></span><span class="label"></span><span class="dims">${cm(def.size.w)}×${cm(def.size.h)}×${cm(def.size.d)}</span>`
+    btn.querySelector('.label')!.textContent = def.name
     btn.title = def.description ?? `${def.name} platzieren`
     btn.addEventListener('click', () => o.placeElement(def))
     catalogEl.appendChild(btn)
@@ -142,19 +190,25 @@ export function setupUI(o: UIOptions): void {
     }
     importFile.value = ''
   })
+  $('clear').addEventListener('click', () => {
+    if (confirm('Alle Elemente entfernen? Der Grundriss bleibt erhalten.')) {
+      editor.select(null)
+      store.clearElements()
+    }
+  })
   $('reset').addEventListener('click', () => {
-    if (confirm('Raum und alle Elemente zurücksetzen?')) {
+    if (confirm('Grundriss und Küche auf den Auslieferungszustand zurücksetzen?')) {
       editor.select(null)
       store.reset()
     }
   })
 
   // --- Store → UI ------------------------------------------------------------
+  const roomInfo = $('room-info')
   store.subscribe((state) => {
-    const active = document.activeElement
-    if (active !== roomInputs.width) roomInputs.width.value = cm(state.room.width)
-    if (active !== roomInputs.depth) roomInputs.depth.value = cm(state.room.depth)
-    if (active !== roomInputs.height) roomInputs.height.value = cm(state.room.height)
+    if (document.activeElement !== roomHeight) roomHeight.value = cm(state.room.height)
+    const b = bounds(state.room)
+    roomInfo.textContent = `${state.room.name} · ${cm(b.width)} × ${cm(b.depth)} cm`
     $('element-count').textContent = String(state.elements.length)
     renderSelection(editor.selected)
   })

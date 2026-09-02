@@ -4,87 +4,172 @@ WebXR-Raumplaner in TypeScript (Vite + Three.js). Entwickelt für die **Meta Que
 aber genauso im Desktop-Browser nutzbar – mit umschaltbarer **3D-**, **isometrischer**
 und **2D-Grundriss-Ansicht**.
 
-
 **Live:** https://baumgartner-software.github.io/room-visualizer/
+
+## So sieht die Küche aktuell aus
+
+Diese Bilder werden bei jedem Push automatisch aus der laufenden Anwendung
+gerendert (siehe [Automatischer Screenshot](#automatischer-screenshot)) – sie
+zeigen also immer den echten Stand des Projekts.
+
+![Küche in der 3D-Ansicht](docs/preview/kitchen.png)
+
+| Isometrisch | Grundriss (2D) |
+| --- | --- |
+| ![Isometrische Ansicht](docs/preview/isometrisch.png) | ![Grundriss](docs/preview/grundriss.png) |
 
 ## Ziel des Projekts
 
-Einen Raum (Breite × Länge × Höhe) definieren, Einrichtungselemente aus einem Katalog
-hineinstellen und diese direkt im Raum verschieben, drehen und in der Größe anpassen –
-am Ende immersiv mit der Quest 3 (VR oder AR/Passthrough), unterwegs aber auch bequem
-am Desktop in 3D, isometrisch oder als 2D-Grundriss.
+Einen Raum definieren, Einrichtungselemente aus einem Katalog hineinstellen und
+diese direkt im Raum verschieben, drehen, einfärben und in der Größe anpassen –
+am Ende immersiv mit der Quest 3 (VR oder AR/Passthrough), unterwegs aber auch
+bequem am Desktop in 3D, isometrisch oder als 2D-Grundriss.
 
-Erster Anwendungsfall ist die **Küchenplanung**: Elemente im 60-cm-Raster
-(Unterschrank, Schubladenschrank, Spülenschrank, Herdumbau, Hängeschrank,
-Hochschrank, Kühlschrank) sowie eine frei in der Länge ziehbare **Arbeitsplatte**.
+Erster Anwendungsfall ist die **Küchenplanung** im echten Grundriss des Hauses.
 
-## Funktionen (Stand: erstes Ziel)
+## Grundriss und Standard-Küche
 
-- Raum definieren (Breite, Länge, Höhe in cm) – im Browser-Panel oder im VR-Menü
-- Katalog-Menü zum Platzieren von Elementen (Küche im 60er-Raster, Arbeitsplatte, freie Box)
-- **Bearbeitungsmodus**: am ausgewählten Element erscheinen sechs Griffkugeln
-  (rot = X, grün = Y, blau = Z). Kugel ziehen = Größe der jeweiligen Seite ändern.
-  Element selbst ziehen = verschieben. Drehen in 90°-Schritten.
-- Ansichten: 3D (Orbit), isometrisch, 2D-Grundriss (Draufsicht) – jederzeit umschaltbar
-- WebXR: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
-  Controller-Trigger = auswählen/ziehen, Griff-Taste = 3D-Menü vor sich holen.
-- Automatisches Speichern im Browser (localStorage), Export/Import als JSON
-- Tastatur: `R` drehen, `Entf` löschen, `E` Griffe an/aus, `Esc` abwählen
+Beim ersten Start (und über *Zurücksetzen*) lädt die Anwendung den Wohnbereich
+aus der Bauplan-Skizze und eine fertig eingerichtete Küche.
+
+| Bauplan (Handskizze) | Referenz-Rendering der Küche |
+| --- | --- |
+| ![Grundriss-Skizze](docs/referenz/grundriss-skizze.jpg) | ![Küchen-Rendering](docs/referenz/kuechen-rendering.jpg) |
+
+**Aus der Skizze übernommen** (Ursprung = nordwestliche Innenecke, x nach Osten,
+z nach Süden; alle Maße in cm):
+
+| Maß | Wert |
+| --- | --- |
+| Nordwand | 681 – aufgeteilt in 76,5 Wand · 209 Fenster · 91 Wand · 209 Fenster · 95 Wand |
+| Ostwand | 682, mit Fenster 108 (89 vor der Südecke) |
+| Küche | 409 (Westwand) × 244 (Südwand) |
+| Flur | 152 breit, 273 lang, nach Süden offen (führt weiter zum Büro) |
+| Südwand Wohnbereich | 285 |
+| Wandscheibe am Flur | 43,5 diagonal |
+
+**Angenommen** (in der Skizze nicht bemaßt): Raumhöhe 250 cm, Wandstärken
+(außen 24, innen 12), Fensterbrüstung 95 cm und Fensteroberkante 220 cm. Der
+Bereich hinter dem Flur (Büro) ist in der Skizze abgeschnitten und daher nicht
+modelliert. Alles davon lässt sich in `src/defaultProject.ts` anpassen.
+
+Die **Küche** folgt dem Referenz-Rendering: L-Form aus Westzeile (Unterschränke,
+Hängeschränke, Rückwand) und Nordzeile unter dem Fenster mit Spüle, dazu der
+Hochschrankblock mit Backofen und Kühlschrank an der Flurwand sowie eine
+freistehende Kochinsel mit Kochfeld und Dunstabzugshaube.
+
+## Funktionen
+
+- **Raum**: Grundriss als Polygon (auch L-Form) mit Fenstern, Türöffnungen und
+  Innenwänden. Raumhöhe frei einstellbar, alternativ ein einfacher Rechteck-Raum.
+- **Puppenhaus-Ansicht**: Wände zwischen Kamera und Raum werden ausgeblendet.
+  Steht man im Raum (XR), bleiben alle Wände stehen.
+- **Katalog** mit Küchenelementen im 60er-Raster (Unterschrank, Schubladen-,
+  Spülen-, Herdumbauschrank, Hängeschrank, Aufsatzschrank, Hochschrank,
+  Kühlschrank), Arbeitsplatte, Kochinsel, Kochfeld, Spülbecken, Backofen,
+  Dunstabzugshaube und Rückwand.
+- **Bearbeitungsmodus**: Am ausgewählten Element erscheinen sechs Griffkugeln
+  (rot = X, grün = Y, blau = Z). Kugel ziehen = Größe der Seite ändern, Element
+  ziehen = verschieben, dazu drehen, duplizieren, löschen.
+- **Farbwerkzeug**: Farbe aus der Palette (oder eigene Farbe) wählen und
+  Elemente, Wände oder den Boden per Klick einfärben – am Desktop und in VR.
+- **Ansichten**: 3D (Orbit), isometrisch, 2D-Grundriss – jederzeit umschaltbar.
+- **WebXR**: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
+  Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
+  Das VR-Menü hat vier Seiten: Raum · Elemente · Farbe · Auswahl.
+- **Persistenz** im Browser (localStorage), Export/Import als JSON.
+
+### Bedienung
+
+| | |
+| --- | --- |
+| Maus | Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste = schwenken, Rad = Zoom. |
+| Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `P` Pinsel an/aus · `Esc` abwählen |
+| Quest 3 | „VR starten“ bzw. „AR (Passthrough)“, Trigger = auswählen/ziehen, Griff-Taste = Menü holen |
+
+### URL-Parameter
+
+| Parameter | Wirkung |
+| --- | --- |
+| `?ui=0` | Bedienoberfläche ausblenden |
+| `?reset=1` | Gespeicherten Stand ignorieren, mit Grundriss + Standardküche starten |
+| `?view=kitchen\|isometric\|top` | Startansicht wählen |
+| `?cam=px,py,pz,tx,ty,tz` | Freie Kameraposition und Blickpunkt in Grundriss-Metern |
 
 ## Entwicklung
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # Typecheck + Produktions-Build nach dist/
-npm run preview    # Build lokal ansehen
+npm run dev         # http://localhost:5173
+npm run build       # Typecheck + Produktions-Build nach dist/
+npm run preview     # Build lokal ansehen
+npm run screenshot  # Bilder in docs/preview/ neu rendern (benötigt Chromium)
 ```
 
-Für Tests mit der Quest 3 muss die Seite über HTTPS erreichbar sein. Am einfachsten ist
-die veröffentlichte GitHub-Pages-Seite; alternativ `adb reverse tcp:5173 tcp:5173` mit
-dem Dev-Server (dann `http://localhost:5173` im Quest-Browser, `localhost` gilt als
-sicherer Kontext).
+Für `npm run screenshot` einmalig `npx playwright install chromium` ausführen.
+
+Für Tests mit der Quest 3 muss die Seite über HTTPS erreichbar sein. Am
+einfachsten ist die veröffentlichte GitHub-Pages-Seite; alternativ
+`adb reverse tcp:5173 tcp:5173` mit dem Dev-Server (dann `http://localhost:5173`
+im Quest-Browser, `localhost` gilt als sicherer Kontext).
 
 ### Projektstruktur
 
 | Datei | Inhalt |
 | --- | --- |
-| `src/main.ts` | Einstieg: Renderer, Szene, Verdrahtung von Maus/Tastatur, Render-Loop |
+| `src/main.ts` | Einstieg: Renderer, Szene, Maus/Tastatur, Render-Loop, URL-Parameter |
+| `src/defaultProject.ts` | Grundriss aus dem Bauplan + Standard-Küche |
 | `src/store.ts` | Zustand (Raum + Elemente), Persistenz, Snapping/Clamping |
-| `src/catalog.ts` | Element-Katalog (Küche) |
-| `src/room.ts` | Darstellung des Raums (Wände, Boden, Raster) |
+| `src/geometry.ts` | Grundriss-Mathematik (Bounding-Box, Schwerpunkt, Normalen) |
+| `src/catalog.ts` | Element-Katalog |
+| `src/room.ts` | Boden, Decke und Wände inklusive Fensteröffnungen |
 | `src/elements.ts` | Meshes der platzierten Elemente |
-| `src/editor.ts` | Auswahl, Verschieben, Griffkugeln/Resize – arbeitet mit Weltstrahlen, daher identisch für Maus und XR-Controller |
+| `src/editor.ts` | Auswahl, Verschieben, Griffkugeln, Farbwerkzeug – arbeitet mit Weltstrahlen und ist dadurch für Maus und XR-Controller identisch |
 | `src/views.ts` | Kameras/Steuerung für 3D, isometrisch, 2D |
-| `src/xr.ts` | WebXR-Session, Controller, 3D-Menü in VR/AR |
-| `src/ui.ts` | HTML-Seitenpanel |
+| `src/xr.ts` | WebXR-Session, Controller, Seitenmenü in VR/AR |
+| `src/ui.ts` | HTML-Seitenpanel inklusive Farbpalette |
+| `scripts/screenshot.mjs` | Headless-Rendering für die README-Bilder |
 
-Alle Maße intern in **Metern**; die UI zeigt Zentimeter. Der Raumursprung ist die linke
-vordere Bodenecke, `position` eines Elements ist die Mitte seiner Unterkante.
+Alle Maße intern in **Metern**, die Oberfläche zeigt Zentimeter. Der
+Raumursprung ist die nordwestliche Innenecke, `position` eines Elements ist die
+Mitte seiner Unterkante.
 
 ## Deployment
 
-Bei **jedem Push** baut die GitHub Action (`.github/workflows/deploy.yml`) das Projekt
-(Typecheck + Vite-Build). Pushes auf `main` werden zusätzlich auf **GitHub Pages**
+Bei **jedem Push** baut `.github/workflows/deploy.yml` das Projekt (Typecheck +
+Vite-Build). Pushes auf `main` werden zusätzlich auf **GitHub Pages**
 veröffentlicht.
 
-Einmalig muss in den Repository-Einstellungen unter **Settings → Pages → Build and
-deployment → Source** die Option **GitHub Actions** gewählt werden
-(https://github.com/baumgartner-software/room-visualizer/settings/pages). Der Actions-Token
-darf Pages nicht selbst aktivieren; bis dahin schlägt nur der Deploy-Job fehl, der Build
-läuft. Danach den Workflow erneut starten („Re-run“) oder einfach den nächsten Push abwarten.
+Voraussetzungen, die einmalig im Repository gesetzt werden müssen:
+
+1. **Settings → Pages → Build and deployment → Source = „GitHub Actions“**
+   ([Link](https://github.com/baumgartner-software/room-visualizer/settings/pages)).
+   Der Actions-Token darf Pages nicht selbst aktivieren.
+2. **Settings → Environments → `github-pages` → Deployment branches and tags**:
+   `main` erlauben (oder „No restriction“)
+   ([Link](https://github.com/baumgartner-software/room-visualizer/settings/environments)).
+
+### Automatischer Screenshot
+
+`.github/workflows/screenshot.yml` startet bei jedem Push auf `main` einen
+Headless-Chromium, lädt die gebaute Anwendung mit `?reset=1&ui=0`, rendert die
+drei Ansichten und committet die Bilder nach `docs/preview/` zurück auf `main`.
+Der Commit trägt `[skip ci]` und löst deshalb keinen weiteren Lauf aus.
 
 ## Arbeitsweise / Hinweise für Agenten
 
 - **Direkt auf `main` pushen ist erlaubt und erwünscht** – auch für KI-Agenten
-  (z. B. Claude Code). Kein Pull-Request nötig, der Build/Deploy läuft automatisch.
+  (z. B. Claude Code). Kein Pull-Request nötig, Build, Deploy und Screenshot
+  laufen automatisch.
 - Vor dem Push `npm run build` ausführen (Typecheck + Build müssen fehlerfrei sein).
-- Änderungen an Funktionsumfang bitte in diesem README nachziehen.
+- Änderungen am Funktionsumfang bitte in diesem README nachziehen.
+- Die Bilder unter `docs/preview/` nicht von Hand bearbeiten – sie werden vom
+  Workflow überschrieben.
 
 ## Roadmap / Ideen
 
 - Hand-Tracking auf der Quest 3 (aktuell Controller)
-- Wandmontierte Elemente automatisch an Wände einrasten, Kollisionsprüfung
-- Maßangaben/Bemaßung im 2D-Grundriss
-- Weitere Kataloge (Bad, Wohnzimmer), Texturen/Materialien
-- Teilen von Projekten per Link
+- Elemente an Wänden und aneinander einrasten, Kollisionsprüfung
+- Bemaßung im 2D-Grundriss, Grundriss im Editor bearbeiten
+- Esszimmer und Wohnbereich möblieren, weitere Kataloge (Bad, Schlafzimmer)
+- Realistischere Fronten (Griffe, Rahmen) und Materialien

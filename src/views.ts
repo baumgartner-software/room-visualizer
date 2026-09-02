@@ -1,6 +1,7 @@
 import { Camera, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import type { RoomSpec } from './types'
+import { bounds } from './geometry'
+import type { Bounds, RoomSpec } from './types'
 
 export type ViewMode = 'perspective' | 'isometric' | 'top'
 
@@ -12,8 +13,8 @@ export const VIEW_LABELS: Record<ViewMode, string> = {
 
 /**
  * Verwaltet die Nicht-XR-Kameras: perspektivische 3D-Ansicht, isometrische
- * Ansicht und 2D-Draufsicht (Grundriss). Der Raum ist um den Ursprung
- * zentriert, daher liegt das Orbit-Ziel bei (0, h/2, 0).
+ * Ansicht und 2D-Draufsicht. Der Raum ist um den Ursprung zentriert, das
+ * Orbit-Ziel liegt daher bei (0, h/2, 0).
  */
 export class Views {
   mode: ViewMode = 'perspective'
@@ -22,8 +23,13 @@ export class Views {
   controls: OrbitControls
   camera: Camera
   private aspect = 1
+  private b: Bounds
 
-  constructor(private domElement: HTMLElement, private room: RoomSpec) {
+  constructor(
+    private domElement: HTMLElement,
+    private room: RoomSpec,
+  ) {
+    this.b = bounds(room)
     this.perspective = new PerspectiveCamera(60, 1, 0.05, 200)
     this.ortho = new OrthographicCamera(-1, 1, 1, -1, -100, 200)
     this.camera = this.perspective
@@ -45,23 +51,24 @@ export class Views {
 
   setRoom(room: RoomSpec): void {
     this.room = room
+    this.b = bounds(room)
     this.updateOrthoFrustum()
-    const target = this.target()
-    this.controls.target.copy(target)
+    this.controls.target.copy(this.target())
     this.controls.update()
   }
 
   setMode(mode: ViewMode, room: RoomSpec = this.room): void {
     this.mode = mode
     this.room = room
+    this.b = bounds(room)
     const target = this.target()
-    const size = Math.max(room.width, room.depth, room.height)
+    const size = Math.max(this.b.width, this.b.depth, room.height)
     this.controls.dispose()
 
     if (mode === 'perspective') {
       this.camera = this.perspective
       this.perspective.up.set(0, 1, 0)
-      this.perspective.position.set(size * 0.35, room.height * 1.1, room.depth / 2 + size * 1.25)
+      this.perspective.position.set(size * 0.3, room.height * 1.2, this.b.depth / 2 + size * 0.95)
       this.controls = new OrbitControls(this.perspective, this.domElement)
       this.controls.enableRotate = true
     } else if (mode === 'isometric') {
@@ -87,6 +94,19 @@ export class Views {
     this.controls.update()
   }
 
+  /** Freie Kameraposition, z. B. für den automatischen Screenshot. */
+  focus(position: Vector3, target: Vector3): void {
+    this.mode = 'perspective'
+    this.camera = this.perspective
+    this.perspective.up.set(0, 1, 0)
+    this.perspective.position.copy(position)
+    this.controls.dispose()
+    this.controls = new OrbitControls(this.perspective, this.domElement)
+    this.controls.enableDamping = false
+    this.controls.target.copy(target)
+    this.controls.update()
+  }
+
   update(): void {
     this.controls.update()
   }
@@ -94,7 +114,7 @@ export class Views {
   /** Skalierungsfaktor für Griffe, damit sie in jeder Ansicht greifbar bleiben. */
   handleRadius(worldPoint: Vector3): number {
     if (this.isOrtho) {
-      return clampNum(0.04 * (Math.max(this.room.width, this.room.depth, this.room.height) / 4) / this.ortho.zoom, 0.02, 0.25)
+      return clampNum((0.04 * Math.max(this.b.width, this.b.depth, this.room.height)) / 4 / this.ortho.zoom, 0.02, 0.25)
     }
     const dist = this.perspective.position.distanceTo(worldPoint)
     return clampNum(dist * 0.012, 0.015, 0.15)
@@ -105,7 +125,7 @@ export class Views {
   }
 
   private updateOrthoFrustum(): void {
-    const half = Math.max(this.room.width, this.room.depth, this.room.height) * 0.7
+    const half = Math.max(this.b.width, this.b.depth, this.room.height) * 0.62
     this.ortho.left = -half * this.aspect
     this.ortho.right = half * this.aspect
     this.ortho.top = half

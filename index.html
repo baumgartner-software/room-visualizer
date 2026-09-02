@@ -24,11 +24,33 @@
     <aside id="panel">
       <section>
         <h2>Raum</h2>
-        <div class="row3">
-          <label>Breite (cm)<input id="room-width" type="number" min="100" max="2000" step="1" /></label>
-          <label>Länge (cm)<input id="room-depth" type="number" min="100" max="2000" step="1" /></label>
-          <label>Höhe (cm)<input id="room-height" type="number" min="100" max="2000" step="1" /></label>
+        <p class="muted small" id="room-info">–</p>
+        <label>Raumhöhe (cm)<input id="room-height" type="number" min="100" max="2000" step="1" /></label>
+        <div class="row">
+          <button id="room-plan">Grundriss laden</button>
         </div>
+        <details>
+          <summary>Einfacher Rechteck-Raum</summary>
+          <div class="row3">
+            <label>Breite (cm)<input id="room-width" type="number" min="100" max="2000" step="1" value="400" /></label>
+            <label>Länge (cm)<input id="room-depth" type="number" min="100" max="2000" step="1" value="300" /></label>
+          </div>
+          <button id="room-rect">Grundriss durch Rechteck ersetzen</button>
+        </details>
+      </section>
+
+      <section>
+        <h2>Farbe</h2>
+        <div id="palette"></div>
+        <div class="row">
+          <label class="grow">Eigene Farbe<input id="paint-color" type="color" value="#c9a063" /></label>
+        </div>
+        <div class="row">
+          <button id="paint-toggle">Pinsel aus</button>
+        </div>
+        <p class="muted small">
+          Farbe wählen, dann Element, Wand oder Boden anklicken. Taste <kbd>P</kbd> schaltet den Pinsel um.
+        </p>
       </section>
 
       <section>
@@ -66,6 +88,7 @@
         <div class="row">
           <button id="export">Export JSON</button>
           <button id="import">Import JSON</button>
+          <button id="clear">Leeren</button>
           <button id="reset" class="danger">Zurücksetzen</button>
         </div>
         <input id="import-file" type="file" accept="application/json,.json" hidden />
@@ -76,7 +99,7 @@
         <h2>Bedienung</h2>
         <ul>
           <li><b>Maus:</b> Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste / zwei Finger = Ansicht schwenken, Rad = Zoom.</li>
-          <li><b>Tastatur:</b> <kbd>R</kbd> drehen, <kbd>Entf</kbd> löschen, <kbd>E</kbd> Griffe an/aus, <kbd>Esc</kbd> abwählen.</li>
+          <li><b>Tastatur:</b> <kbd>R</kbd> drehen, <kbd>Entf</kbd> löschen, <kbd>E</kbd> Griffe an/aus, <kbd>P</kbd> Pinsel, <kbd>Esc</kbd> abwählen.</li>
           <li><b>Quest 3:</b> „VR starten“ bzw. „AR (Passthrough)“. Trigger = auswählen/ziehen, Griff-Taste = Menü vor dich holen.</li>
         </ul>
       </section>

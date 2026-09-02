@@ -1,0 +1,46 @@
+name: Screenshot der Küche
+
+# Rendert die Anwendung headless und legt aktuelle Bilder unter docs/preview/ ab,
+# damit im README immer der tatsächliche Stand der Küche zu sehen ist.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/preview/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshot-main
+  cancel-in-progress: true
+
+jobs:
+  screenshot:
+    name: Rendern & einchecken
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Chromium für Playwright installieren
+        run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Bilder rendern
+        run: npm run screenshot
+      - name: Geänderte Bilder committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/preview
+          if git diff --staged --quiet; then
+            echo "Die Küche sieht unverändert aus – nichts zu committen."
+          else
+            git commit -m "docs: Screenshots der Küche aktualisieren [skip ci]"
+            git push
+          fi

@@ -1,8 +1,9 @@
+import { defaultProject } from './defaultProject'
+import { bounds, rectangularRoom } from './geometry'
 import type { ElementDef, PlacedElement, ProjectState, RoomSpec, Vec3 } from './types'
 
-const STORAGE_KEY = 'room-visualizer:project:v1'
+const STORAGE_KEY = 'room-visualizer:project:v2'
 
-export const DEFAULT_ROOM: RoomSpec = { width: 4, depth: 3, height: 2.5 }
 export const MIN_ROOM = 1
 export const MAX_ROOM = 20
 export const MIN_ELEMENT_SIZE = 0.02
@@ -24,15 +25,20 @@ export function footprint(el: PlacedElement): { w: number; d: number } {
   return swapped ? { w: el.size.d, d: el.size.w } : { w: el.size.w, d: el.size.d }
 }
 
-/** Hält das Element innerhalb des Raumes (Größe wird nicht verändert). */
+/**
+ * Hält das Element im umschließenden Rechteck des Grundrisses. Bei L-förmigen
+ * Räumen darf ein Element damit auch außerhalb der Bodenfläche liegen – das ist
+ * bewusst so, damit sich nichts „von selbst“ verschiebt.
+ */
 export function clampToRoom(el: PlacedElement, room: RoomSpec): Vec3 {
+  const b = bounds(room)
   const fp = footprint(el)
   const hw = fp.w / 2
   const hd = fp.d / 2
   return {
-    x: fp.w >= room.width ? room.width / 2 : clamp(el.position.x, hw, room.width - hw),
+    x: fp.w >= b.width ? b.centerX : clamp(el.position.x, b.minX + hw, b.maxX - hw),
     y: el.size.h >= room.height ? 0 : clamp(el.position.y, 0, room.height - el.size.h),
-    z: fp.d >= room.depth ? room.depth / 2 : clamp(el.position.z, hd, room.depth - hd),
+    z: fp.d >= b.depth ? b.centerZ : clamp(el.position.z, b.minZ + hd, b.maxZ - hd),
   }
 }
 
@@ -46,8 +52,8 @@ export class Store {
   state: ProjectState
   private listeners = new Set<Listener>()
 
-  constructor() {
-    this.state = load() ?? emptyProject()
+  constructor(initial?: ProjectState) {
+    this.state = initial ?? load() ?? defaultProject()
   }
 
   subscribe(listener: Listener): () => void {
@@ -65,12 +71,31 @@ export class Store {
     return this.state.room
   }
 
-  setRoom(patch: Partial<RoomSpec>): void {
-    const room: RoomSpec = {
-      width: clamp(snap(patch.width ?? this.state.room.width), MIN_ROOM, MAX_ROOM),
-      depth: clamp(snap(patch.depth ?? this.state.room.depth), MIN_ROOM, MAX_ROOM),
-      height: clamp(snap(patch.height ?? this.state.room.height), MIN_ROOM, MAX_ROOM),
-    }
+  setRoomHeight(height: number): void {
+    this.state.room.height = clamp(snap(height), MIN_ROOM, MAX_ROOM)
+    for (const el of this.state.elements) el.position = clampToRoom(el, this.state.room)
+    this.emit()
+  }
+
+  setRoomColors(patch: { wallColor?: string; floorColor?: string }): void {
+    if (patch.wallColor) this.state.room.wallColor = patch.wallColor
+    if (patch.floorColor) this.state.room.floorColor = patch.floorColor
+    this.emit()
+  }
+
+  /** Ersetzt den Grundriss durch ein einfaches Rechteck. */
+  setRectangularRoom(width: number, depth: number): void {
+    this.state.room = rectangularRoom(
+      clamp(snap(width), MIN_ROOM, MAX_ROOM),
+      clamp(snap(depth), MIN_ROOM, MAX_ROOM),
+      this.state.room.height,
+      this.state.room,
+    )
+    for (const el of this.state.elements) el.position = clampToRoom(el, this.state.room)
+    this.emit()
+  }
+
+  setRoom(room: RoomSpec): void {
     this.state.room = room
     for (const el of this.state.elements) el.position = clampToRoom(el, room)
     this.emit()
@@ -82,15 +107,16 @@ export class Store {
   }
 
   addFromDef(def: ElementDef, position?: Partial<Vec3>): PlacedElement {
+    const b = bounds(this.state.room)
     const el: PlacedElement = {
       id: newId(def.id),
       defId: def.id,
       name: def.name,
       size: { ...def.size },
       position: {
-        x: position?.x ?? this.state.room.width / 2,
+        x: position?.x ?? b.centerX,
         y: position?.y ?? def.elevation,
-        z: position?.z ?? this.state.room.depth / 2,
+        z: position?.z ?? b.centerZ,
       },
       rotationY: 0,
       color: def.color,
@@ -140,8 +166,14 @@ export class Store {
     this.emit()
   }
 
+  /** Zurück auf Grundriss + Standard-Küche. */
   reset(): void {
-    this.state = emptyProject()
+    this.state = defaultProject()
+    this.emit()
+  }
+
+  clearElements(): void {
+    this.state.elements = []
     this.emit()
   }
 
@@ -150,16 +182,13 @@ export class Store {
   }
 }
 
-function emptyProject(): ProjectState {
-  return { version: 1, room: { ...DEFAULT_ROOM }, elements: [] }
-}
-
 function normalize(raw: unknown): ProjectState {
   const obj = (raw ?? {}) as Partial<ProjectState>
-  const room = { ...DEFAULT_ROOM, ...(obj.room ?? {}) }
+  const fallback = defaultProject()
+  const room = obj.room?.outline?.length ? { ...fallback.room, ...obj.room } : fallback.room
   const elements = Array.isArray(obj.elements) ? obj.elements : []
   return {
-    version: 1,
+    version: 2,
     room,
     elements: elements
       .filter((e): e is PlacedElement => !!e && typeof e === 'object' && !!e.size && !!e.position)
@@ -179,7 +208,9 @@ function load(): ProjectState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return normalize(JSON.parse(raw))
+    const parsed = JSON.parse(raw) as Partial<ProjectState>
+    if (parsed.version !== 2) return null
+    return normalize(parsed)
   } catch {
     return null
   }
