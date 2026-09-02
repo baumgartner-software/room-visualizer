@@ -307,6 +307,7 @@ const api = {
   ready: false,
   store,
   editor,
+  xr,
   views,
   focusKitchen,
   setView: (mode: ViewMode) => views.setMode(mode, store.room),

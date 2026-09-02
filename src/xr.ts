@@ -81,9 +81,10 @@ export class XRMenu {
 
     const panel = new Mesh(
       new PlaneGeometry(PANEL_W + GAP * 2, panelH + GAP * 2),
-      new MeshBasicMaterial({ color: new Color('#0f141b'), transparent: true, opacity: 0.9, depthTest: false }),
+      new MeshBasicMaterial({ color: new Color('#0f141b'), transparent: true, opacity: 0.96, depthTest: false }),
     )
     panel.position.z = -0.002
+    panel.name = 'menu-panel'
     this.group.add(panel)
 
     const topY = panelH / 2
@@ -137,9 +138,10 @@ export class XRMenu {
     } satisfies XRMenuButton
     this.group.add(this.closeButton)
 
-    // Das Menü liegt immer vor der Szene, nie halb in einer Wand.
+    // Das Menü liegt immer vor der Szene, nie halb in einer Wand. Die Rückwand
+    // bekommt eine eigene Reihenfolge, damit sie die Knöpfe nie überdeckt.
     this.group.traverse((object) => {
-      object.renderOrder = 900
+      object.renderOrder = object.name === 'menu-panel' ? 898 : 901
       const material = (object as Mesh).material as MeshBasicMaterial | undefined
       if (material && 'depthTest' in material) material.depthTest = false
     })
@@ -188,8 +190,9 @@ export class XRMenu {
     forward.y = 0
     if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1)
     forward.normalize()
-    const target = cameraWorldPos.clone().addScaledVector(forward, 0.65)
-    target.y = cameraWorldPos.y - 0.18
+    // Etwas weiter weg und fast auf Augenhöhe: sonst muss man den Kopf senken.
+    const target = cameraWorldPos.clone().addScaledVector(forward, 0.8)
+    target.y = cameraWorldPos.y - 0.04
     if (snap) {
       this.group.position.copy(target)
       this.group.visible = true
@@ -436,6 +439,103 @@ function helpTexture(): CanvasTexture {
   return texture
 }
 
+/**
+ * Farbpalette am linken Controller. Sie erscheint nur im Werkzeug „Farbe“:
+ * mit dem rechten Controller hineinzeigen, mit dessen Stick blättern und mit
+ * dem Trigger eine Farbe wählen.
+ */
+class XRPalette {
+  readonly group = new Group()
+  private readonly slots: Mesh[] = []
+  private readonly rows = 4
+  private readonly columns = 2
+  private offset = 0
+  private hovered: Mesh | null = null
+  private active = ''
+
+  constructor() {
+    this.group.name = 'xr-palette'
+    this.group.visible = false
+    this.group.position.set(0, 0.045, 0)
+    this.group.rotation.x = -Math.PI / 4
+
+    const slotW = 0.062
+    const slotH = 0.032
+    const gap = 0.006
+    const panelW = this.columns * slotW + (this.columns + 1) * gap
+    const panelH = this.rows * (slotH + gap) + gap + 0.03
+
+    const panel = new Mesh(
+      new PlaneGeometry(panelW, panelH),
+      new MeshBasicMaterial({ color: new Color('#0f141b'), transparent: true, opacity: 0.95 }),
+    )
+    panel.position.z = -0.002
+    panel.raycast = () => undefined
+    this.group.add(panel)
+
+    const title = makeLabelPlane('Farbe · Stick blättert', panelW - gap * 2, 0.02, '#1a212c', '#9fb3c8', 30)
+    title.position.set(0, panelH / 2 - 0.016, 0)
+    title.raycast = () => undefined
+    this.group.add(title)
+
+    for (let row = 0; row < this.rows; row++) {
+      for (let column = 0; column < this.columns; column++) {
+        const slot = makeLabelPlane('', slotW, slotH, '#2b3a4d', '#ffffff', 32)
+        slot.position.set(
+          -panelW / 2 + gap + slotW / 2 + column * (slotW + gap),
+          panelH / 2 - 0.036 - slotH / 2 - row * (slotH + gap),
+          0,
+        )
+        this.slots.push(slot)
+        this.group.add(slot)
+      }
+    }
+    this.refresh()
+  }
+
+  get visible(): boolean {
+    return this.group.visible
+  }
+
+  get interactive(): Mesh[] {
+    return this.group.visible ? this.slots.filter((s) => s.visible) : []
+  }
+
+  setVisible(visible: boolean): void {
+    this.group.visible = visible
+  }
+
+  setActive(color: string): void {
+    this.active = color
+    this.refresh()
+  }
+
+  /** Blättert um ganze Reihen. */
+  scroll(direction: number): void {
+    const perRow = this.columns
+    const max = Math.max(0, PALETTE.length - this.slots.length)
+    this.offset = Math.min(max, Math.max(0, this.offset + direction * perRow))
+    this.refresh()
+  }
+
+  setHover(mesh: Mesh | null): void {
+    if (mesh === this.hovered) return
+    if (this.hovered) (this.hovered.material as MeshBasicMaterial).color.set('#ffffff')
+    if (mesh) (mesh.material as MeshBasicMaterial).color.set('#ffd23f')
+    this.hovered = mesh
+  }
+
+  private refresh(): void {
+    this.slots.forEach((slot, i) => {
+      const entry = PALETTE[this.offset + i]
+      slot.visible = !!entry
+      if (!entry) return
+      slot.userData.color = entry.color
+      setPlaneLabel(slot, entry.name, entry.color, 32, entry.color === this.active)
+    })
+  }
+}
+
 export interface XRManagerOptions {
   renderer: WebGLRenderer
   scene: Scene
@@ -457,6 +557,9 @@ export interface XRManagerOptions {
 export class XRManager {
   readonly menu: XRMenu
   private readonly hud: XRHud
+  private readonly palette = new XRPalette()
+  /** Zeigt der rechte Controller gerade auf die Palette? */
+  private overPalette = false
   private readonly controllers: Group[] = []
   private activeController: Group | null = null
   private readonly raycaster = new Raycaster()
@@ -483,11 +586,18 @@ export class XRManager {
       onCloseHelp: () => this.setHelpVisible(false),
     })
     o.scene.add(this.menu.group, this.hud.group)
-    o.editor.addToolListener((tool) => this.hud.setToolLabel(TOOL_LABELS[tool]))
+    o.editor.addToolListener((tool) => {
+      this.hud.setToolLabel(TOOL_LABELS[tool])
+      this.palette.setVisible(tool === 'paint')
+    })
     o.editor.addSelectionListener((ids, phase) => this.hud.setSelection(ids.length, phase))
     // Auch eine im Browser-Panel gewählte Farbe wird im VR-Menü markiert.
-    o.editor.addPaintColorListener((color) => this.menu.setActiveInGroup('color', `color-${color}`))
+    o.editor.addPaintColorListener((color) => {
+      this.menu.setActiveInGroup('color', `color-${color}`)
+      this.palette.setActive(color)
+    })
     this.menu.setActiveInGroup('color', `color-${o.editor.paintColor}`)
+    this.palette.setActive(o.editor.paintColor)
     this.setupControllers()
   }
 
@@ -586,7 +696,10 @@ export class XRManager {
       controller.name = `controller-${i}`
       controller.add(makeRayLine())
       controller.addEventListener('connected', (event) => {
-        controller.userData.inputSource = (event as unknown as { data: XRInputSource }).data
+        const source = (event as unknown as { data: XRInputSource }).data
+        controller.userData.inputSource = source
+        // Die Palette sitzt am linken Controller, gezielt wird mit dem rechten.
+        if (source.handedness !== 'right') controller.add(this.palette.group)
       })
       controller.addEventListener('disconnected', () => {
         controller.userData.inputSource = null
@@ -612,6 +725,12 @@ export class XRManager {
   private onSelectStart(controller: Group): void {
     const ray = this.rayFrom(controller, this.tmpRay)
     this.raycaster.ray.copy(ray)
+    const paletteHit = this.raycaster.intersectObjects(this.palette.interactive, false)[0]
+    if (paletteHit) {
+      const color = paletteHit.object.userData.color as string | undefined
+      if (color) this.o.editor.setPaintColor(color)
+      return
+    }
     const hudHit = this.raycaster.intersectObjects(this.hud.interactive, false)[0]
     if (hudHit) {
       ;(hudHit.object.userData.button as XRMenuButton).action()
@@ -657,12 +776,19 @@ export class XRManager {
     this.readGamepads(camPosition, camQuaternion)
 
     let menuHover: Mesh | null = null
+    let paletteHover: Mesh | null = null
     for (const controller of this.controllers) {
       if (!controller.visible) continue
       const ray = this.rayFrom(controller, this.tmpRay)
       this.raycaster.ray.copy(ray)
       let length = 3
+      const paletteHit = this.raycaster.intersectObjects(this.palette.interactive, false)[0]
+      if (paletteHit) {
+        paletteHover = paletteHit.object as Mesh
+        length = paletteHit.distance
+      }
       const menuHit =
+        paletteHit ??
         this.raycaster.intersectObjects(this.hud.interactive, false)[0] ??
         (this.menu.group.visible ? this.raycaster.intersectObjects(this.menu.interactive, false)[0] : undefined)
       if (menuHit) {
@@ -679,8 +805,9 @@ export class XRManager {
       const line = controller.getObjectByName('ray') as Line | undefined
       if (line) line.scale.z = length
     }
-    this.menu.setHover(menuHover)
-    this.hud.setHover(menuHover)
+    this.menu.setHover(paletteHover ? null : menuHover)
+    this.hud.setHover(paletteHover ? null : menuHover)
+    this.palette.setHover(paletteHover)
   }
 
   private setTool(tool: Tool): void {
@@ -761,8 +888,9 @@ export class XRManager {
       const pad = source?.gamepad
       if (!pad) continue
       const isLeft = source?.handedness !== 'right'
-      const state = (controller.userData.pad ??= { x: 0, a: false, b: false, stick: false }) as {
+      const state = (controller.userData.pad ??= { x: 0, y: 0, a: false, b: false, stick: false }) as {
         x: number
+        y: number
         a: boolean
         b: boolean
         stick: boolean
@@ -807,11 +935,20 @@ export class XRManager {
           this.movePlayer(-stickY * speed, stickX * speed, camQuaternion)
         }
       } else {
-        if (pushedX && dirX !== 0) this.turnPlayer(-dirX * (Math.PI / 4), camPosition)
-        if (Math.abs(stickY) > 0.2) {
-          const y = this.o.player.position.y - stickY * 1.2 * dt
-          this.o.player.position.y = Math.min(8, Math.max(-1.2, y))
+        // Zeigt der Controller auf die Palette, blättert der Stick dort statt
+        // die Ansicht zu drehen oder die Augenhöhe zu verstellen.
+        this.overPalette = this.palette.visible && this.pointsAtPalette(controller)
+        const dirY = Math.abs(stickY) > 0.7 ? Math.sign(stickY) : 0
+        if (this.overPalette) {
+          if (dirY !== 0 && dirY !== state.y) this.palette.scroll(dirY)
+        } else {
+          if (pushedX && dirX !== 0) this.turnPlayer(-dirX * (Math.PI / 4), camPosition)
+          if (Math.abs(stickY) > 0.2) {
+            const y = this.o.player.position.y - stickY * 1.2 * dt
+            this.o.player.position.y = Math.min(8, Math.max(-1.2, y))
+          }
         }
+        state.y = dirY
       }
 
       // Stickdruck links öffnet und schließt das Menü.
@@ -829,6 +966,11 @@ export class XRManager {
       }
       state.b = b
     }
+  }
+
+  private pointsAtPalette(controller: Group): boolean {
+    this.raycaster.ray.copy(this.rayFrom(controller, this.tmpRay))
+    return this.raycaster.intersectObjects(this.palette.interactive, false).length > 0
   }
 
   /**

@@ -27,6 +27,7 @@ export const MOVE_CONTROLS: ControlHint[] = [
   { key: 'R-Stick ← →', action: 'Um 45° umsehen' },
   { key: 'R-Stick ↑ ↓', action: 'Augenhöhe ändern' },
   { key: 'Trigger', action: 'Anmalen (Werkzeug Farbe)' },
+  { key: 'Palette links', action: 'Hinzeigen, R-Stick ↑↓ blättert' },
 ]
 
 export const ALWAYS_CONTROLS: ControlHint[] = [

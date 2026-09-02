@@ -108,16 +108,21 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   bewegt wird nur über die Griffe. Im Griff-Schritt reagieren ausschließlich die
   Griffe, der Strahl geht durch alle anderen Objekte hindurch.
 - **Griffe**: die Pfeile verschieben entlang genau einer Achse, die weiße Platte
-  darüber frei in der Ebene – beides wirkt auf die **gesamte Auswahl**. Die sechs
-  Kugeln ziehen die jeweilige Seite auf (rot = X, grün = Y, blau = Z) und
-  erscheinen nur, wenn genau ein Objekt ausgewählt ist.
+  darüber frei in der Ebene – beides wirkt auf die **gesamte Auswahl**. Die
+  Kugeln ziehen die jeweilige Seite auf (rot = X, grün = Y, blau = Z); bei
+  mehreren ausgewählten Objekten bleiben nur die **grünen** übrig, mit denen
+  sich alle gleichzeitig in der Höhe anpassen lassen. Breite und Tiefe hängen an
+  der Drehung jedes einzelnen Objekts und wären für eine Gruppe nicht eindeutig.
 - **Hover-Rahmen**: Das Objekt unter dem Mauszeiger bzw. dem Controller-Strahl
   bekommt einen gelben Rahmen – auch Wände und Boden im Werkzeug *Farbe*.
 - **Umgebung**: Rasenfläche und Himmelskuppel rund um das Haus, sichtbar durch
   die Terrassentüren.
 - **Farbwerkzeug**: Farbe aus der Palette (oder eigene Farbe) wählen und
   Elemente, Wände oder den Boden per Klick einfärben – am Desktop und in VR.
-  Die gewählte Farbe ist in beiden Paletten markiert.
+  Die gewählte Farbe ist überall markiert. In XR hängt im Werkzeug *Farbe* eine
+  **Palette am linken Controller**: mit dem rechten hineinzeigen, mit dessen
+  Stick ↑↓ blättern, mit dem Trigger wählen. Zeigt der Controller nicht auf die
+  Palette, bewegt und dreht derselbe Stick wieder wie im Werkzeug *Ansicht*.
 - **Ansichten**: 3D (Orbit), isometrisch, 2D-Grundriss – jederzeit umschaltbar.
 - **WebXR**: `immersive-vr` und `immersive-ar` (Passthrough auf der Quest 3).
   Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
@@ -149,7 +154,7 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | Tastatur | `E` Griffe zeigen / zurück zur Auswahl · `R` drehen · `Entf` löschen · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
 | Quest 3 · immer | Trigger = Objekte auswählen · linken Stick drücken = Menü auf/zu · Leiste unten rechts = Menü · Werkzeug · Griffe zeigen · Auswahl aufheben |
 | Quest 3 · Bearbeiten | Im Griff-Schritt: linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen – alles auf die gesamte Auswahl |
-| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe |
+| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe · auf die Palette am linken Controller zeigen: ↑↓ blättert |
 
 ### URL-Parameter
 

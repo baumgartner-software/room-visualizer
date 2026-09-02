@@ -71,6 +71,7 @@ interface AxisDrag {
   t0: number
   size0: Size
   starts: Map<string, Vec3>
+  sizes0: Map<string, Size>
 }
 
 interface PlaneDrag {
@@ -238,8 +239,10 @@ export class Editor {
 
     for (const object of this.handles.children) {
       const info = object.userData.handle as HandleInfo
-      // Größe lässt sich nur für ein einzelnes Objekt sinnvoll ziehen.
-      object.visible = !this.hiddenAxes.has(info.axis) && (info.kind !== 'resize' || !!single)
+      // Breite und Tiefe hängen an der Drehung jedes Objekts und sind für eine
+      // Gruppe nicht eindeutig; die Höhe dagegen schon.
+      const resizable = info.kind !== 'resize' || !!single || info.axis === 'y'
+      object.visible = !this.hiddenAxes.has(info.axis) && resizable
       if (!object.visible) continue
 
       if (info.kind === 'move-free') {
@@ -461,6 +464,15 @@ export class Editor {
     return starts
   }
 
+  private startSizes(): Map<string, Size> {
+    const sizes = new Map<string, Size>()
+    for (const id of this.selectedIds) {
+      const el = this.store.getElement(id)
+      if (el) sizes.set(id, { ...el.size })
+    }
+    return sizes
+  }
+
   /** @returns false, wenn der Griff aus dieser Blickrichtung nicht ziehbar ist. */
   private startHandleDrag(object: Object3D): boolean {
     const info = object.userData.handle as HandleInfo | undefined
@@ -484,7 +496,16 @@ export class Editor {
     const t0 = closestParamOnLine(lineOrigin, axisDir, this.raycaster.ray)
     if (t0 === null) return false
     const size0 = this.selected?.size ?? { w: 1, h: 1, d: 1 }
-    this.drag = { kind: info.kind, info, axisDir, lineOrigin, t0, size0: { ...size0 }, starts }
+    this.drag = {
+      kind: info.kind,
+      info,
+      axisDir,
+      lineOrigin,
+      t0,
+      size0: { ...size0 },
+      starts,
+      sizes0: this.startSizes(),
+    }
     applyGizmoColor(object, true)
     return true
   }
@@ -507,7 +528,26 @@ export class Editor {
       return
     }
 
-    // Größe ziehen gibt es nur bei genau einem ausgewählten Objekt.
+    const { axis: dragAxis, sign: dragSign } = drag.info
+    if (this.selectedIds.length > 1) {
+      // Bei mehreren Objekten wird nur die Höhe gezogen – für alle gleich viel.
+      if (dragAxis !== 'y') return
+      for (const [id, pos0] of drag.starts) {
+        const size0 = drag.sizes0.get(id)
+        if (!size0) continue
+        let change = delta
+        let height = size0.h + dragSign * change
+        if (height < MIN_ELEMENT_SIZE) {
+          height = MIN_ELEMENT_SIZE
+          change = dragSign * (MIN_ELEMENT_SIZE - size0.h)
+        }
+        const position = { ...pos0 }
+        if (dragSign < 0) position.y = pos0.y + change
+        this.store.updateElement(id, { size: { ...size0, h: height }, position })
+      }
+      return
+    }
+
     const id = this.selectedIds[0]
     const pos0 = drag.starts.get(id)
     if (!pos0) return
