@@ -120,7 +120,8 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   Tastaturbefehle. Da HTML in einer laufenden Immersive-Sitzung nicht sichtbar
   ist, gibt es dieselbe Grafik dort als Tafel im Blickfeld – einzublenden über
   das VR-Menü (*Raum → Steuerung zeigen*). Immer sichtbar bleibt in XR nur eine
-  kleine Leiste unten rechts mit *☰ Menü* und dem aktiven Werkzeug.
+  kleine Leiste unten rechts mit *☰ Menü* und dem aktiven Werkzeug. Menü, Leiste
+  und Tafel folgen dem Kopf, bleiben beim Gehen und Drehen also erreichbar.
 - **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
   (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
   einen Server. Im Panel gibt es ihn zum Kopieren, dazu ein Feld mit dem
@@ -135,7 +136,7 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
 | Quest 3 · immer | Trigger = auswählen und ziehen · Griff = Menü holen · Leiste unten rechts = Menü und Werkzeug |
 | Quest 3 · Bearbeiten | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen |
-| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten · rechter Stick ←→ = um 45° umsehen |
+| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten (in Blickrichtung) · rechter Stick ←→ = um 45° umsehen, ↑↓ = Augenhöhe |
 
 ### URL-Parameter
 

@@ -387,7 +387,7 @@ textarea {
   padding: 0 12px 10px;
 }
 
-#help-figure svg {
+#help-figure canvas {
   width: 100%;
   height: auto;
   display: block;

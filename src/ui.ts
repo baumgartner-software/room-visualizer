@@ -1,4 +1,4 @@
-import { controllerHelpSvg, DESKTOP_CONTROLS } from './controllerHelp'
+import { DESKTOP_CONTROLS, renderHelpCanvas } from './controllerHelp'
 import { TOOL_LABELS, type Editor, type Tool } from './editor'
 import { bounds } from './geometry'
 import type { Store } from './store'
@@ -48,7 +48,7 @@ export function setupUI(o: UIOptions): void {
   $('toggle-panel').addEventListener('click', () => panel.classList.toggle('collapsed'))
 
   // --- Steuerungs-Hilfe ------------------------------------------------------
-  $('help-figure').innerHTML = controllerHelpSvg()
+  $('help-figure').replaceChildren(renderHelpCanvas(2))
   const desktopList = $('help-desktop')
   for (const hint of DESKTOP_CONTROLS) {
     const dt = document.createElement('dt')

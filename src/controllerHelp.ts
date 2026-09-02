@@ -1,9 +1,10 @@
 /**
  * Steuerungs-Legende mit einer schematischen Abbildung der Quest-3-Controller.
  *
- * Dieselbe SVG-Grafik wird zweimal verwendet: direkt im HTML-Panel und – über
- * eine Canvas-Textur – als Tafel im Blickfeld während der XR-Sitzung. Deshalb
- * bringt das SVG seinen eigenen Hintergrund und feste Farben mit.
+ * Gezeichnet wird direkt auf ein Canvas – dieselbe Zeichnung landet im
+ * HTML-Panel und als Textur auf der Tafel in der XR-Sitzung. Der frühere Weg
+ * über ein SVG-Bild blieb im Quest-Browser schwarz, weil das Bild dort nicht
+ * zuverlässig geladen wurde.
  */
 
 export interface ControlHint {
@@ -23,6 +24,7 @@ export const EDIT_CONTROLS: ControlHint[] = [
 export const MOVE_CONTROLS: ControlHint[] = [
   { key: 'L-Stick', action: 'Gehen und seitlich treten' },
   { key: 'R-Stick ← →', action: 'Um 45° umsehen' },
+  { key: 'R-Stick ↑ ↓', action: 'Augenhöhe ändern' },
   { key: 'Trigger', action: 'Anmalen (Werkzeug Farbe)' },
 ]
 
@@ -47,84 +49,197 @@ const LINE = '#8ba3bd'
 const TEXT = '#e8edf3'
 const MUTED = '#9fb3c8'
 const ACCENT = '#3b82f6'
+const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
-const WIDTH = 1000
-const HEIGHT = 520
+export const HELP_WIDTH = 1000
+export const HELP_HEIGHT = 540
+export const HELP_ASPECT = HELP_WIDTH / HELP_HEIGHT
 
-/** Ein schematischer Controller; `labels` bestimmt, welche Teile beschriftet werden. */
-function controller(x: number, y: number, hand: string, labels: 'left' | 'right'): string {
-  const left = `
-      <g stroke="${MUTED}" stroke-width="1.2" fill="none">
-        <path d="M50 56 L20 42"/>
-        <path d="M40 118 L14 118"/>
-      </g>
-      <g font-size="13" fill="${MUTED}" font-weight="600">
-        <text x="18" y="36" text-anchor="end">Stick</text>
-        <text x="12" y="122" text-anchor="end">Trigger</text>
-      </g>`
-  const right = `
-      <g stroke="${MUTED}" stroke-width="1.2" fill="none">
-        <path d="M120 40 L134 20"/>
-        <path d="M150 158 L172 178"/>
-      </g>
-      <g font-size="13" fill="${MUTED}" font-weight="600">
-        <text x="138" y="16">A/X · B/Y</text>
-        <text x="176" y="184">Griff</text>
-      </g>`
-  return `
-    <g transform="translate(${x}, ${y})">
-      <text x="95" y="-14" text-anchor="middle" font-size="13" font-weight="700" fill="${TEXT}">${hand}</text>
-      <path d="M62 78 L128 78 L136 150 Q140 196 118 214 L92 214 Q68 196 66 150 Z"
-            fill="${CARD}" stroke="${LINE}" stroke-width="2.5" stroke-linejoin="round"/>
-      <ellipse cx="95" cy="62" rx="56" ry="34" fill="${CARD}" stroke="${LINE}" stroke-width="2.5"/>
-      <circle cx="66" cy="56" r="16" fill="${BG}" stroke="${ACCENT}" stroke-width="2.5"/>
-      <circle cx="66" cy="56" r="7" fill="${ACCENT}"/>
-      <circle cx="115" cy="48" r="11" fill="${BG}" stroke="${LINE}" stroke-width="2"/>
-      <text x="115" y="53" text-anchor="middle" font-size="12" font-weight="700" fill="${TEXT}">A</text>
-      <circle cx="126" cy="76" r="11" fill="${BG}" stroke="${LINE}" stroke-width="2"/>
-      <text x="126" y="81" text-anchor="middle" font-size="12" font-weight="700" fill="${TEXT}">B</text>
-      <path d="M60 96 Q42 104 44 126 Q46 142 62 140" fill="none" stroke="${ACCENT}" stroke-width="4"
-            stroke-linecap="round"/>
-      <path d="M136 132 Q152 140 150 162 Q148 176 134 176" fill="none" stroke="${ACCENT}" stroke-width="4"
-            stroke-linecap="round"/>
-      ${labels === 'left' ? left : right}
-    </g>`
+/** Zeichnet die komplette Legende in logischen Einheiten (HELP_WIDTH × HELP_HEIGHT). */
+export function drawControllerHelp(ctx: CanvasRenderingContext2D, title = 'Steuerung in VR / AR'): void {
+  ctx.save()
+  ctx.clearRect(0, 0, HELP_WIDTH, HELP_HEIGHT)
+  ctx.fillStyle = BG
+  roundRect(ctx, 0, 0, HELP_WIDTH, HELP_HEIGHT, 20)
+  ctx.fill()
+
+  ctx.fillStyle = TEXT
+  ctx.font = `700 17px ${FONT}`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillText(title, 28, 36)
+
+  controller(ctx, 44, 104, 'Links', 'left')
+  controller(ctx, 250, 104, 'Rechts', 'right')
+
+  section(ctx, 'Werkzeug Bearbeiten', EDIT_CONTROLS, 500, 78)
+  section(ctx, 'Werkzeug Ansicht & Farbe', MOVE_CONTROLS, 500, 300)
+  section(ctx, 'Immer', ALWAYS_CONTROLS, 500, 466)
+  ctx.restore()
 }
 
-function section(title: string, entries: ControlHint[], x: number, y: number): string {
-  const rows = entries
-    .map((entry, i) => {
-      const rowY = y + 26 + i * 34
-      return `
-      <g transform="translate(${x}, ${rowY})">
-        <rect x="0" y="-16" rx="6" width="118" height="26" fill="${CARD}" stroke="${LINE}" stroke-width="1.2"/>
-        <text x="59" y="2" text-anchor="middle" font-size="13" font-weight="700" fill="${TEXT}">${entry.key}</text>
-        <text x="132" y="2" font-size="14" fill="${MUTED}">${entry.action}</text>
-      </g>`
-    })
-    .join('')
-  return `
-    <text x="${x}" y="${y}" font-size="12" font-weight="700" letter-spacing="0.08em"
-          fill="${ACCENT}">${title.toUpperCase()}</text>
-    ${rows}`
+/** Fertiges Canvas in der gewünschten Auflösung. */
+export function renderHelpCanvas(scale = 2): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(HELP_WIDTH * scale)
+  canvas.height = Math.round(HELP_HEIGHT * scale)
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(scale, scale)
+  drawControllerHelp(ctx)
+  return canvas
 }
 
-/** Vollständige Legende als SVG-Markup. */
-export function controllerHelpSvg(title = 'Steuerung in VR / AR'): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${HEIGHT}" width="${WIDTH}" height="${HEIGHT}"
-      font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
-    <rect width="${WIDTH}" height="${HEIGHT}" rx="20" fill="${BG}"/>
-    <text x="28" y="34" font-size="16" font-weight="700" fill="${TEXT}">${title}</text>
-    ${controller(44, 100, 'Links', 'left')}
-    ${controller(250, 100, 'Rechts', 'right')}
-    ${section('Werkzeug Bearbeiten', EDIT_CONTROLS, 500, 78)}
-    ${section('Werkzeug Ansicht &amp; Farbe', MOVE_CONTROLS, 500, 306)}
-    ${section('Immer', ALWAYS_CONTROLS, 500, 442)}
-  </svg>`
+function controller(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  hand: string,
+  labels: 'left' | 'right',
+): void {
+  ctx.save()
+  ctx.translate(x, y)
+
+  ctx.fillStyle = TEXT
+  ctx.font = `700 14px ${FONT}`
+  ctx.textAlign = 'center'
+  ctx.fillText(hand, 95, -14)
+
+  ctx.fillStyle = CARD
+  ctx.strokeStyle = LINE
+  ctx.lineWidth = 2.5
+  ctx.lineJoin = 'round'
+
+  // Handgriff
+  ctx.beginPath()
+  ctx.moveTo(62, 78)
+  ctx.lineTo(128, 78)
+  ctx.lineTo(136, 150)
+  ctx.quadraticCurveTo(140, 196, 118, 214)
+  ctx.lineTo(92, 214)
+  ctx.quadraticCurveTo(68, 196, 66, 150)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+
+  // Deckfläche
+  ctx.beginPath()
+  ctx.ellipse(95, 62, 56, 34, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  // Thumbstick
+  ctx.beginPath()
+  ctx.arc(66, 56, 16, 0, Math.PI * 2)
+  ctx.fillStyle = BG
+  ctx.fill()
+  ctx.strokeStyle = ACCENT
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(66, 56, 7, 0, Math.PI * 2)
+  ctx.fillStyle = ACCENT
+  ctx.fill()
+
+  // Tasten
+  for (const [bx, by, label] of [
+    [115, 48, 'A'],
+    [126, 76, 'B'],
+  ] as [number, number, string][]) {
+    ctx.beginPath()
+    ctx.arc(bx, by, 11, 0, Math.PI * 2)
+    ctx.fillStyle = BG
+    ctx.fill()
+    ctx.strokeStyle = LINE
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.fillStyle = TEXT
+    ctx.font = `700 12px ${FONT}`
+    ctx.textAlign = 'center'
+    ctx.fillText(label, bx, by + 4)
+  }
+
+  // Zeigefinger-Trigger und Griff-Taste
+  ctx.strokeStyle = ACCENT
+  ctx.lineWidth = 4
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(60, 96)
+  ctx.quadraticCurveTo(42, 104, 44, 126)
+  ctx.quadraticCurveTo(46, 142, 62, 140)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(136, 132)
+  ctx.quadraticCurveTo(152, 140, 150, 162)
+  ctx.quadraticCurveTo(148, 176, 134, 176)
+  ctx.stroke()
+  ctx.lineCap = 'butt'
+
+  // Beschriftungen
+  ctx.strokeStyle = MUTED
+  ctx.lineWidth = 1.2
+  ctx.fillStyle = MUTED
+  ctx.font = `600 13px ${FONT}`
+  if (labels === 'left') {
+    line(ctx, 50, 56, 20, 42)
+    line(ctx, 40, 118, 14, 118)
+    ctx.textAlign = 'right'
+    ctx.fillText('Stick', 18, 36)
+    ctx.fillText('Trigger', 12, 122)
+  } else {
+    line(ctx, 120, 40, 134, 20)
+    line(ctx, 150, 158, 172, 178)
+    ctx.textAlign = 'left'
+    ctx.fillText('A/X · B/Y', 138, 16)
+    ctx.fillText('Griff', 176, 184)
+  }
+  ctx.restore()
 }
 
-export function controllerHelpDataUrl(): string {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(controllerHelpSvg())}`
+function section(
+  ctx: CanvasRenderingContext2D,
+  title: string,
+  entries: ControlHint[],
+  x: number,
+  y: number,
+): void {
+  ctx.fillStyle = ACCENT
+  ctx.font = `700 12px ${FONT}`
+  ctx.textAlign = 'left'
+  ctx.fillText(title.toUpperCase(), x, y)
+
+  entries.forEach((entry, i) => {
+    const rowY = y + 26 + i * 34
+    ctx.fillStyle = CARD
+    ctx.strokeStyle = LINE
+    ctx.lineWidth = 1.2
+    roundRect(ctx, x, rowY - 16, 118, 26, 6)
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.fillStyle = TEXT
+    ctx.font = `700 13px ${FONT}`
+    ctx.textAlign = 'center'
+    ctx.fillText(entry.key, x + 59, rowY + 2)
+
+    ctx.fillStyle = MUTED
+    ctx.font = `14px ${FONT}`
+    ctx.textAlign = 'left'
+    ctx.fillText(entry.action, x + 132, rowY + 2)
+  })
 }
 
-export const HELP_ASPECT = WIDTH / HEIGHT
+function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
+  ctx.beginPath()
+  ctx.moveTo(x1, y1)
+  ctx.lineTo(x2, y2)
+  ctx.stroke()
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}

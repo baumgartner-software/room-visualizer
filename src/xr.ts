@@ -19,7 +19,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'
-import { controllerHelpDataUrl, HELP_ASPECT } from './controllerHelp'
+import { HELP_ASPECT, renderHelpCanvas } from './controllerHelp'
 import { TOOL_LABELS, type Editor, type Tool } from './editor'
 import type { RoomView } from './room'
 import type { Store } from './store'
@@ -142,15 +142,24 @@ export class XRMenu {
     setPlaneLabel(mesh, label, bg, 40)
   }
 
-  placeInFrontOf(cameraWorldPos: Vector3, cameraForward: Vector3): void {
+  /**
+   * Hält das Menü vor dem Nutzer. `snap` setzt es sofort (Griff-Taste), sonst
+   * zieht es weich nach, damit es beim Gehen und Drehen nicht stehen bleibt.
+   */
+  follow(cameraWorldPos: Vector3, cameraForward: Vector3, snap: boolean): void {
     const forward = cameraForward.clone()
     forward.y = 0
     if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1)
     forward.normalize()
-    this.group.position.copy(cameraWorldPos).addScaledVector(forward, 0.65)
-    this.group.position.y = cameraWorldPos.y - 0.18
+    const target = cameraWorldPos.clone().addScaledVector(forward, 0.65)
+    target.y = cameraWorldPos.y - 0.18
+    if (snap) {
+      this.group.position.copy(target)
+      this.group.visible = true
+    } else {
+      this.group.position.lerp(target, 0.12)
+    }
     this.group.lookAt(cameraWorldPos)
-    this.group.visible = true
   }
 
   hide(): void {
@@ -322,24 +331,11 @@ class XRHud {
   }
 }
 
-/** Rastert die SVG-Legende in eine Textur. */
+/** Die Legende wird direkt gezeichnet – kein Umweg über ein zu ladendes Bild. */
 function helpTexture(): CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 1600
-  canvas.height = Math.round(1600 / HELP_ASPECT)
-  const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = '#111823'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-  const texture = new CanvasTexture(canvas)
+  const texture = new CanvasTexture(renderHelpCanvas(2))
   texture.colorSpace = SRGBColorSpace
   texture.anisotropy = 8
-  const image = new Image()
-  image.onload = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
-    texture.needsUpdate = true
-  }
-  image.src = controllerHelpDataUrl()
   return texture
 }
 
@@ -369,6 +365,10 @@ export class XRManager {
   private readonly raycaster = new Raycaster()
   private readonly tmpMatrix = new Matrix4()
   private readonly tmpRay = new Ray()
+  private readonly headMatrix = new Matrix4()
+  private readonly headPosition = new Vector3()
+  private readonly headQuaternion = new Quaternion()
+  private readonly headScale = new Vector3()
   private needsMenuPlacement = false
   private isAR = false
   /** Zeitstempel des letzten Frames – für gleichmäßige Bewegung. */
@@ -529,17 +529,16 @@ export class XRManager {
   /** Pro Frame aufrufen (nur relevant, wenn eine XR-Session läuft). */
   update(): void {
     if (!this.isPresenting) return
-    const xrCamera = this.o.renderer.xr.getCamera()
-    const camPosition = xrCamera.getWorldPosition(new Vector3())
-    const camQuaternion = xrCamera.getWorldQuaternion(new Quaternion())
+    this.readHead()
+    const camPosition = this.headPosition
+    const camQuaternion = this.headQuaternion
     this.hud.update(camPosition, camQuaternion)
-    if (this.needsMenuPlacement) {
-      const pos = xrCamera.getWorldPosition(new Vector3())
-      const fwd = xrCamera.getWorldDirection(new Vector3())
-      if (pos.lengthSq() > 0 || fwd.lengthSq() > 0) {
-        this.menu.placeInFrontOf(pos, fwd)
-        this.needsMenuPlacement = false
-      }
+
+    // Das Menü folgt dem Kopf, damit es beim Gehen und Drehen nicht zurückbleibt.
+    if (this.menu.group.visible || this.needsMenuPlacement) {
+      const forward = new Vector3(0, 0, -1).applyQuaternion(camQuaternion)
+      this.menu.follow(camPosition, forward, this.needsMenuPlacement)
+      this.needsMenuPlacement = false
     }
 
     if (this.activeController) {
@@ -592,7 +591,8 @@ export class XRManager {
     dir.y = 0
     if (dir.lengthSq() < 1e-6) return
     dir.normalize()
-    const side = new Vector3(dir.z, 0, -dir.x)
+    // Rechts steht senkrecht auf der Blickrichtung: (x, z) → (−z, x).
+    const side = new Vector3(-dir.z, 0, dir.x)
     this.o.player.position.addScaledVector(dir, forward).addScaledVector(side, right)
   }
 
@@ -653,7 +653,7 @@ export class XRManager {
           forward.y = 0
           if (forward.lengthSq() > 1e-6) {
             forward.normalize()
-            const side = new Vector3(forward.z, 0, -forward.x)
+            const side = new Vector3(-forward.z, 0, forward.x)
             const step = 0.5 * dt
             const move = forward
               .multiplyScalar(-stickY * step)
@@ -666,8 +666,12 @@ export class XRManager {
           const speed = 1.6 * dt
           this.movePlayer(-stickY * speed, stickX * speed, camQuaternion)
         }
-      } else if (pushedX && dirX !== 0) {
-        this.turnPlayer(-dirX * (Math.PI / 4), camPosition)
+      } else {
+        if (pushedX && dirX !== 0) this.turnPlayer(-dirX * (Math.PI / 4), camPosition)
+        if (Math.abs(stickY) > 0.2) {
+          const y = this.o.player.position.y - stickY * 1.2 * dt
+          this.o.player.position.y = Math.min(8, Math.max(-1.2, y))
+        }
       }
 
       const a = pad.buttons[4]?.pressed ?? false
@@ -683,15 +687,29 @@ export class XRManager {
     }
   }
 
+  /**
+   * Kopfposition und -drehung in Weltkoordinaten.
+   *
+   * `renderer.xr.getCamera()` liefert eine Kamera ohne Elternobjekt: three.js
+   * verrechnet das Spieler-Rig erst beim Rendern, und `getWorldQuaternion()`
+   * würde diese Matrix sofort wieder überschreiben. Deshalb wird die Kopfmatrix
+   * hier selbst aus Rig und Kamera-Matrix gebildet.
+   */
+  private readHead(): void {
+    const player = this.o.player
+    player.updateMatrixWorld()
+    this.headMatrix.multiplyMatrices(player.matrixWorld, this.o.renderer.xr.getCamera().matrix)
+    this.headMatrix.decompose(this.headPosition, this.headQuaternion, this.headScale)
+  }
+
   /** Bodenpunkt ca. 1 m vor dem Headset (Weltkoordinaten). */
   private pointInFront(distance = 1): Vector3 {
-    const cam = this.o.renderer.xr.getCamera()
-    const pos = cam.getWorldPosition(new Vector3())
-    const fwd = cam.getWorldDirection(new Vector3())
+    this.readHead()
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(this.headQuaternion)
     fwd.y = 0
     if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1)
     fwd.normalize()
-    return new Vector3(pos.x + fwd.x * distance, 0, pos.z + fwd.z * distance)
+    return new Vector3(this.headPosition.x + fwd.x * distance, 0, this.headPosition.z + fwd.z * distance)
   }
 
   private buildMenu(): XRMenuPage[] {
