@@ -20,7 +20,7 @@ import {
 } from 'three'
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'
 import { controllerHelpDataUrl, HELP_ASPECT } from './controllerHelp'
-import type { Editor } from './editor'
+import { TOOL_LABELS, type Editor, type Tool } from './editor'
 import type { RoomView } from './room'
 import type { Store } from './store'
 import type { ElementDef } from './types'
@@ -236,69 +236,111 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
- * Tafel mit der Steuerungs-Legende, die während der XR-Sitzung unten rechts im
- * Blickfeld mitläuft. HTML ist in einer laufenden Immersive-Session nicht
- * sichtbar, deshalb wird dieselbe Grafik hier als Textur gezeigt.
+ * Kopfgebundene Anzeige: eine kleine Leiste unten rechts, die immer sichtbar
+ * bleibt (Menü holen, Werkzeug wechseln), und darüber die ausklappbare
+ * Steuerungs-Tafel. HTML ist in einer Immersive-Session nicht sichtbar,
+ * deshalb liegen beide als Texturen in der Szene.
  */
-class XRHelpPanel {
-  readonly mesh: Mesh
+class XRHud {
+  readonly group = new Group()
+  private readonly help: Mesh
+  private readonly menuButton: Mesh
+  private readonly toolButton: Mesh
   private readonly targetPosition = new Vector3()
   private readonly targetQuaternion = new Quaternion()
-  private readonly offset = new Vector3(0.19, -0.15, -0.62)
+  private readonly offset = new Vector3(0, 0, -0.72)
   private placed = false
+  private hovered: Mesh | null = null
 
-  constructor() {
-    const width = 0.26
-    const canvas = document.createElement('canvas')
-    canvas.width = 1400
-    canvas.height = Math.round(1400 / HELP_ASPECT)
-    const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#111823'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    const texture = new CanvasTexture(canvas)
-    texture.colorSpace = SRGBColorSpace
-    texture.anisotropy = 8
-    const image = new Image()
-    image.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
-      texture.needsUpdate = true
-    }
-    image.src = controllerHelpDataUrl()
+  constructor(onMenu: () => void, onTool: () => void) {
+    this.group.name = 'xr-hud'
+    this.group.visible = false
 
-    this.mesh = new Mesh(
-      new PlaneGeometry(width, width / HELP_ASPECT),
-      new MeshBasicMaterial({ map: texture, transparent: true, depthTest: false }),
+    const helpWidth = 0.52
+    this.help = new Mesh(
+      new PlaneGeometry(helpWidth, helpWidth / HELP_ASPECT),
+      new MeshBasicMaterial({ map: helpTexture(), transparent: true, depthTest: false }),
     )
-    this.mesh.name = 'xr-help'
-    this.mesh.renderOrder = 999
-    this.mesh.raycast = () => undefined
-    this.mesh.visible = false
+    this.help.position.set(0.2, -0.09, 0)
+    this.help.renderOrder = 998
+    this.help.raycast = () => undefined
+    this.help.visible = false
+
+    this.menuButton = makeLabelPlane('☰ Menü', 0.1, 0.036, TAB_ACTIVE_BG, '#ffffff', 40)
+    this.menuButton.position.set(0.145, -0.3, 0)
+    this.menuButton.userData.button = { id: 'hud-menu', label: 'Menü', action: onMenu }
+
+    this.toolButton = makeLabelPlane('Bearbeiten', 0.13, 0.036, BUTTON_BG, '#ffffff', 40)
+    this.toolButton.position.set(0.27, -0.3, 0)
+    this.toolButton.userData.button = { id: 'hud-tool', label: 'Werkzeug', action: onTool }
+
+    for (const mesh of [this.menuButton, this.toolButton]) mesh.renderOrder = 999
+    this.group.add(this.help, this.menuButton, this.toolButton)
   }
 
-  get visible(): boolean {
-    return this.mesh.visible
+  get interactive(): Mesh[] {
+    return this.group.visible ? [this.menuButton, this.toolButton] : []
+  }
+
+  get helpVisible(): boolean {
+    return this.help.visible
   }
 
   setVisible(visible: boolean): void {
-    this.mesh.visible = visible
+    this.group.visible = visible
     if (!visible) this.placed = false
   }
 
-  /** Läuft dem Kopf weich hinterher, damit die Tafel nicht am Blick klebt. */
+  setHelpVisible(visible: boolean): void {
+    this.help.visible = visible
+  }
+
+  setToolLabel(label: string): void {
+    setPlaneLabel(this.toolButton, label, BUTTON_BG, 40)
+  }
+
+  setHover(mesh: Mesh | null): void {
+    if (mesh === this.hovered) return
+    if (this.hovered) (this.hovered.material as MeshBasicMaterial).color.set('#ffffff')
+    if (mesh) (mesh.material as MeshBasicMaterial).color.set('#ffd23f')
+    this.hovered = mesh
+  }
+
+  /** Läuft dem Kopf weich hinterher, damit nichts am Blick klebt. */
   update(cameraPosition: Vector3, cameraQuaternion: Quaternion): void {
-    if (!this.mesh.visible) return
+    if (!this.group.visible) return
     this.targetPosition.copy(this.offset).applyQuaternion(cameraQuaternion).add(cameraPosition)
     this.targetQuaternion.copy(cameraQuaternion)
     if (!this.placed) {
-      this.mesh.position.copy(this.targetPosition)
-      this.mesh.quaternion.copy(this.targetQuaternion)
+      this.group.position.copy(this.targetPosition)
+      this.group.quaternion.copy(this.targetQuaternion)
       this.placed = true
       return
     }
-    this.mesh.position.lerp(this.targetPosition, 0.18)
-    this.mesh.quaternion.slerp(this.targetQuaternion, 0.18)
+    this.group.position.lerp(this.targetPosition, 0.18)
+    this.group.quaternion.slerp(this.targetQuaternion, 0.18)
   }
+}
+
+/** Rastert die SVG-Legende in eine Textur. */
+function helpTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 1600
+  canvas.height = Math.round(1600 / HELP_ASPECT)
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#111823'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  texture.anisotropy = 8
+  const image = new Image()
+  image.onload = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+    texture.needsUpdate = true
+  }
+  image.src = controllerHelpDataUrl()
+  return texture
 }
 
 export interface XRManagerOptions {
@@ -307,6 +349,8 @@ export interface XRManagerOptions {
   editor: Editor
   store: Store
   roomView: RoomView
+  /** Gruppe, in der Kamera und Controller hängen – wird zum Gehen verschoben. */
+  player: Group
   catalog: ElementDef[]
   /** Platziert ein Element; `worldPoint` ist ein Punkt auf dem Boden in Weltkoordinaten. */
   placeElement: (def: ElementDef, worldPoint?: Vector3) => void
@@ -319,7 +363,7 @@ export interface XRManagerOptions {
  */
 export class XRManager {
   readonly menu: XRMenu
-  private readonly help = new XRHelpPanel()
+  private readonly hud: XRHud
   private readonly controllers: Group[] = []
   private activeController: Group | null = null
   private readonly raycaster = new Raycaster()
@@ -327,14 +371,19 @@ export class XRManager {
   private readonly tmpRay = new Ray()
   private needsMenuPlacement = false
   private isAR = false
-  /** Zeitpunkt der nächsten erlaubten Stick-Wiederholung (Dauerdrücken). */
-  private nextRepeat = 0
+  /** Zeitstempel des letzten Frames – für gleichmäßige Bewegung. */
+  private lastFrame = performance.now()
 
   constructor(private readonly o: XRManagerOptions) {
     o.renderer.xr.enabled = true
     o.renderer.xr.setReferenceSpaceType('local-floor')
     this.menu = new XRMenu(this.buildMenu())
-    o.scene.add(this.menu.group, this.help.mesh)
+    this.hud = new XRHud(
+      () => (this.needsMenuPlacement = true),
+      () => this.cycleTool(),
+    )
+    o.scene.add(this.menu.group, this.hud.group)
+    o.editor.onToolChange = (tool) => this.hud.setToolLabel(TOOL_LABELS[tool])
     this.setupControllers()
   }
 
@@ -403,22 +452,26 @@ export class XRManager {
     this.o.roomView.setTransparent(transparent)
     this.o.editor.setHandleRadius(0.025)
     this.needsMenuPlacement = true
-    this.help.setVisible(true)
-    this.menu.setLabel('help', 'Hilfe: an')
+    this.hud.setVisible(true)
+    this.hud.setHelpVisible(false)
+    this.hud.setToolLabel(TOOL_LABELS[this.o.editor.tool])
+    this.menu.setLabel('help', 'Steuerung zeigen')
     this.o.onSessionChange?.(true)
   }
 
   private onSessionEnd(): void {
     this.o.roomView.setTransparent(false)
-    this.help.setVisible(false)
+    this.hud.setVisible(false)
     this.menu.hide()
+    this.o.player.position.set(0, 0, 0)
+    this.o.player.quaternion.identity()
     this.activeController = null
     this.o.editor.pointerUp()
     this.o.onSessionChange?.(false)
   }
 
   private setupControllers(): void {
-    const { renderer, scene } = this.o
+    const { renderer, player } = this.o
     const factory = new XRControllerModelFactory()
     for (let i = 0; i < 2; i++) {
       const controller = renderer.xr.getController(i)
@@ -433,12 +486,12 @@ export class XRManager {
       controller.addEventListener('selectstart', () => this.onSelectStart(controller))
       controller.addEventListener('selectend', () => this.onSelectEnd(controller))
       controller.addEventListener('squeezestart', () => (this.needsMenuPlacement = true))
-      scene.add(controller)
+      player.add(controller)
       this.controllers.push(controller)
 
       const grip = renderer.xr.getControllerGrip(i)
       grip.add(factory.createControllerModel(grip))
-      scene.add(grip)
+      player.add(grip)
     }
   }
 
@@ -452,6 +505,11 @@ export class XRManager {
   private onSelectStart(controller: Group): void {
     const ray = this.rayFrom(controller, this.tmpRay)
     this.raycaster.ray.copy(ray)
+    const hudHit = this.raycaster.intersectObjects(this.hud.interactive, false)[0]
+    if (hudHit) {
+      ;(hudHit.object.userData.button as XRMenuButton).action()
+      return
+    }
     const menuHit = this.menu.hitTest(this.raycaster)
     if (menuHit) {
       this.menu.press(menuHit)
@@ -472,7 +530,9 @@ export class XRManager {
   update(): void {
     if (!this.isPresenting) return
     const xrCamera = this.o.renderer.xr.getCamera()
-    this.help.update(xrCamera.getWorldPosition(new Vector3()), xrCamera.getWorldQuaternion(new Quaternion()))
+    const camPosition = xrCamera.getWorldPosition(new Vector3())
+    const camQuaternion = xrCamera.getWorldQuaternion(new Quaternion())
+    this.hud.update(camPosition, camQuaternion)
     if (this.needsMenuPlacement) {
       const pos = xrCamera.getWorldPosition(new Vector3())
       const fwd = xrCamera.getWorldDirection(new Vector3())
@@ -485,7 +545,7 @@ export class XRManager {
     if (this.activeController) {
       this.o.editor.pointerMove(this.rayFrom(this.activeController, this.tmpRay))
     }
-    this.readGamepads()
+    this.readGamepads(camPosition, camQuaternion)
 
     let menuHover: Mesh | null = null
     for (const controller of this.controllers) {
@@ -493,9 +553,9 @@ export class XRManager {
       const ray = this.rayFrom(controller, this.tmpRay)
       this.raycaster.ray.copy(ray)
       let length = 3
-      const menuHit = this.menu.group.visible
-        ? this.raycaster.intersectObjects(this.menu.interactive, false)[0]
-        : undefined
+      const menuHit =
+        this.raycaster.intersectObjects(this.hud.interactive, false)[0] ??
+        (this.menu.group.visible ? this.raycaster.intersectObjects(this.menu.interactive, false)[0] : undefined)
       if (menuHit) {
         menuHover = menuHit.object as Mesh
         length = menuHit.distance
@@ -511,53 +571,114 @@ export class XRManager {
       if (line) line.scale.z = length
     }
     this.menu.setHover(menuHover)
+    this.hud.setHover(menuHover)
+  }
+
+  private setTool(tool: Tool): void {
+    this.o.editor.setTool(tool)
+    this.hud.setToolLabel(TOOL_LABELS[tool])
+  }
+
+  private cycleTool(): void {
+    const order: Tool[] = ['view', 'edit', 'paint']
+    const next = order[(order.indexOf(this.o.editor.tool) + 1) % order.length]
+    this.o.editor.setTool(next)
+    this.hud.setToolLabel(TOOL_LABELS[next])
+  }
+
+  /** Gehen: Verschiebt das Spieler-Rig in Blickrichtung. */
+  private movePlayer(forward: number, right: number, camQuaternion: Quaternion): void {
+    const dir = new Vector3(0, 0, -1).applyQuaternion(camQuaternion)
+    dir.y = 0
+    if (dir.lengthSq() < 1e-6) return
+    dir.normalize()
+    const side = new Vector3(dir.z, 0, -dir.x)
+    this.o.player.position.addScaledVector(dir, forward).addScaledVector(side, right)
+  }
+
+  /** Umsehen: Dreht das Rig um die eigene Kopfposition, nicht um den Ursprung. */
+  private turnPlayer(angle: number, camPosition: Vector3): void {
+    const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), angle)
+    const player = this.o.player
+    player.position.sub(camPosition).applyQuaternion(q).add(camPosition)
+    player.quaternion.premultiply(q)
   }
 
   /**
-   * Controller-Tasten und Sticks: schnelles Bearbeiten ohne Umweg über das Menü.
-   *   Stick links/rechts  drehen um 90°
-   *   Stick hoch/runter   Element anheben/absenken
-   *   A/X                 duplizieren
-   *   B/Y                 löschen
+   * Controller-Sticks und -Tasten. Die Belegung hängt am Werkzeug:
+   *
+   *   Bearbeiten   L-Stick ↑↓ Höhe · L-Stick ←→ 90° drehen
+   *                R-Stick schiebt das Element in der Ebene (aus deiner Sicht)
+   *                A/X duplizieren · B/Y löschen
+   *   Ansicht/Farbe  L-Stick gehen · R-Stick ←→ um 45° umsehen
+   *
+   * Im Werkzeug „Bearbeiten“ bleibt man bewusst stehen, damit ein Stick nicht
+   * gleichzeitig Möbel und Standort bewegt.
    */
-  private readGamepads(): void {
+  private readGamepads(camPosition: Vector3, camQuaternion: Quaternion): void {
     const { editor, store } = this.o
     const now = performance.now()
+    const dt = Math.min(0.1, (now - this.lastFrame) / 1000)
+    this.lastFrame = now
+    const editing = editor.tool === 'edit'
+
     for (const controller of this.controllers) {
-      const pad = (controller.userData.inputSource as XRInputSource | null)?.gamepad
+      const source = controller.userData.inputSource as XRInputSource | null
+      const pad = source?.gamepad
       if (!pad) continue
+      const isLeft = source?.handedness !== 'right'
       const state = (controller.userData.pad ??= { x: 0, a: false, b: false }) as {
         x: number
         a: boolean
         b: boolean
       }
 
-      const stickX = pad.axes[2] ?? 0
-      const stickY = pad.axes[3] ?? 0
+      // Achsen 2/3 sind der Stick; ältere Geräte melden ihn auf 0/1.
+      const stickX = pad.axes[2] ?? pad.axes[0] ?? 0
+      const stickY = pad.axes[3] ?? pad.axes[1] ?? 0
       const dirX = Math.abs(stickX) > 0.7 ? Math.sign(stickX) : 0
-      if (dirX !== state.x) {
-        state.x = dirX
-        if (dirX !== 0 && editor.selectedId) {
-          // Nach links dreimal vorwärts drehen entspricht einer Drehung zurück.
-          const turns = dirX > 0 ? 1 : 3
-          for (let i = 0; i < turns; i++) store.rotateElement(editor.selectedId)
-        }
-      }
+      const pushedX = dirX !== state.x
+      state.x = dirX
 
-      if (Math.abs(stickY) > 0.6 && editor.selectedId && now >= this.nextRepeat) {
-        editor.nudgeSelected({ y: stickY < 0 ? 0.02 : -0.02 })
-        this.nextRepeat = now + 90
+      if (editing) {
+        if (isLeft) {
+          if (pushedX && dirX !== 0 && editor.selectedId) {
+            // Nach links dreimal vorwärts drehen entspricht einer Drehung zurück.
+            const turns = dirX > 0 ? 1 : 3
+            for (let i = 0; i < turns; i++) store.rotateElement(editor.selectedId)
+          }
+          if (Math.abs(stickY) > 0.25) editor.nudgeSelected({ y: -stickY * 0.35 * dt })
+        } else if (Math.abs(stickX) > 0.25 || Math.abs(stickY) > 0.25) {
+          const forward = new Vector3(0, 0, -1).applyQuaternion(camQuaternion)
+          forward.y = 0
+          if (forward.lengthSq() > 1e-6) {
+            forward.normalize()
+            const side = new Vector3(forward.z, 0, -forward.x)
+            const step = 0.5 * dt
+            const move = forward
+              .multiplyScalar(-stickY * step)
+              .addScaledVector(side, stickX * step)
+            editor.nudgeSelected({ x: move.x, z: move.z })
+          }
+        }
+      } else if (isLeft) {
+        if (Math.abs(stickX) > 0.15 || Math.abs(stickY) > 0.15) {
+          const speed = 1.6 * dt
+          this.movePlayer(-stickY * speed, stickX * speed, camQuaternion)
+        }
+      } else if (pushedX && dirX !== 0) {
+        this.turnPlayer(-dirX * (Math.PI / 4), camPosition)
       }
 
       const a = pad.buttons[4]?.pressed ?? false
-      if (a && !state.a && editor.selectedId) {
+      if (a && !state.a && editing && editor.selectedId) {
         const copy = store.duplicate(editor.selectedId)
         if (copy) editor.select(copy.id)
       }
       state.a = a
 
       const b = pad.buttons[5]?.pressed ?? false
-      if (b && !state.b && editor.selectedId) store.removeElement(editor.selectedId)
+      if (b && !state.b && editing && editor.selectedId) store.removeElement(editor.selectedId)
       state.b = b
     }
   }
@@ -598,7 +719,7 @@ export class XRManager {
           background: color,
           action: () => {
             editor.setPaintColor(color)
-            this.menu.setLabel('paint-off', 'Pinsel aus')
+            editor.setTool('paint')
           },
         })),
       })
@@ -609,6 +730,14 @@ export class XRManager {
         id: 'room',
         label: 'Raum',
         rows: [
+          { kind: 'title', text: 'Werkzeug' },
+          {
+            kind: 'buttons',
+            buttons: [
+              { id: 'tool-view', label: 'Ansicht (gehen)', action: () => this.setTool('view') },
+              { id: 'tool-edit', label: 'Bearbeiten', action: () => this.setTool('edit') },
+            ],
+          },
           { kind: 'title', text: 'Raum (Griff-Taste holt das Menü)' },
           {
             kind: 'buttons',
@@ -629,10 +758,11 @@ export class XRManager {
             buttons: [
               {
                 id: 'help',
-                label: 'Hilfe: an',
+                label: 'Steuerung zeigen',
                 action: () => {
-                  this.help.setVisible(!this.help.visible)
-                  this.menu.setLabel('help', this.help.visible ? 'Hilfe: an' : 'Hilfe: aus')
+                  const show = !this.hud.helpVisible
+                  this.hud.setHelpVisible(show)
+                  this.menu.setLabel('help', show ? 'Steuerung aus' : 'Steuerung zeigen')
                 },
               },
               { id: 'exit-room', label: 'XR beenden', action: () => void this.o.renderer.xr.getSession()?.end() },
@@ -654,7 +784,7 @@ export class XRManager {
           {
             kind: 'buttons',
             buttons: [
-              { id: 'paint-off', label: 'Pinsel aus', action: () => editor.setPaintColor(null) },
+              { id: 'paint-off', label: 'Zurück zu Bearbeiten', action: () => editor.setTool('edit') },
               { id: 'paint-hide', label: 'Menü ausblenden', action: () => this.menu.hide() },
             ],
           },

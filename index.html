@@ -12,6 +12,11 @@
 
     <header id="topbar">
       <span class="brand">Room Visualizer</span>
+      <nav class="tools" aria-label="Werkzeug">
+        <button data-tool="view" title="Nur ansehen und bewegen">Ansicht</button>
+        <button data-tool="edit" class="active" title="Objekte auswählen und ändern">Bearbeiten</button>
+        <button data-tool="paint" title="Objekte, Wände und Boden einfärben">Farbe</button>
+      </nav>
       <nav class="views" aria-label="Ansicht">
         <button data-view="perspective" class="active">3D</button>
         <button data-view="isometric">Isometrisch</button>
@@ -45,11 +50,9 @@
         <div class="row">
           <label class="grow">Eigene Farbe<input id="paint-color" type="color" value="#c9a063" /></label>
         </div>
-        <div class="row">
-          <button id="paint-toggle">Pinsel aus</button>
-        </div>
         <p class="muted small">
-          Farbe wählen, dann Element, Wand oder Boden anklicken. Taste <kbd>P</kbd> schaltet den Pinsel um.
+          Farbe wählen (schaltet auf das Werkzeug <b>Farbe</b>), dann Element, Wand oder Boden anklicken.
+          Taste <kbd>P</kbd> wechselt zwischen Farbe und Bearbeiten.
         </p>
       </section>
 

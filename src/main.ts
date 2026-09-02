@@ -6,6 +6,7 @@ import { Editor } from './editor'
 import { ElementsLayer } from './elements'
 import { bounds } from './geometry'
 import { RoomView } from './room'
+import { Environment } from './environment'
 import { decodeState, encodeState, shareUrl, tokenFromLocation } from './share'
 import { Store } from './store'
 import type { ElementDef, RoomSpec } from './types'
@@ -27,9 +28,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
 
 const scene = new Scene()
-// Heller Himmel: die Fensteröffnungen wirken dadurch wie Tageslicht.
 const BACKGROUND = new Color('#dbe3ea')
 scene.background = BACKGROUND
+
+// Rasen und Himmelskuppel rund um das Haus.
+const environment = new Environment()
+scene.add(environment.group)
 
 scene.add(new HemisphereLight(0xffffff, 0xb9b0a2, 1.25))
 const sun = new DirectionalLight(0xffffff, 1.5)
@@ -55,9 +59,18 @@ const layer = new ElementsLayer()
 roomGroup.add(layer.group)
 
 const editor = new Editor(store, layer, roomView)
-scene.add(editor.handles)
+scene.add(editor.handles, editor.hoverOutline)
 
 const views = new Views(canvas, store.room)
+
+/**
+ * Spieler-Rig: Kamera und XR-Controller hängen darin, sodass sich der Nutzer in
+ * der Szene bewegen kann, ohne die Welt zu verschieben.
+ */
+const player = new Group()
+player.name = 'player'
+player.add(views.perspective)
+scene.add(player)
 
 /** Der Raum wird um den Ursprung zentriert – in XR steht man dann mittendrin. */
 function layoutRoom(room: RoomSpec): void {
@@ -139,10 +152,13 @@ const xr = new XRManager({
   editor,
   store,
   roomView,
+  player,
   catalog: CATALOG,
   placeElement,
   onSessionChange: (presenting) => {
-    scene.background = presenting && isTransparentSession() ? null : BACKGROUND
+    const passthrough = presenting && isTransparentSession()
+    scene.background = passthrough ? null : BACKGROUND
+    environment.setVisible(!passthrough)
     views.controls.enabled = !presenting
   },
 })
@@ -236,12 +252,15 @@ window.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement | null
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
   if (e.key === 'p' || e.key === 'P') {
-    const custom = document.getElementById('paint-color') as HTMLInputElement | null
-    editor.setPaintColor(editor.paintColor ? null : (custom?.value ?? '#c9a063'))
+    editor.setTool(editor.tool === 'paint' ? 'edit' : 'paint')
+    return
+  }
+  if (e.key === 'v' || e.key === 'V') {
+    editor.setTool(editor.tool === 'view' ? 'edit' : 'view')
     return
   }
   if (e.key === 'Escape') {
-    if (editor.paintColor) editor.setPaintColor(null)
+    if (editor.tool !== 'edit') editor.setTool('edit')
     else editor.select(null)
     return
   }
@@ -278,7 +297,8 @@ renderer.setAnimationLoop(() => {
       editor.setHandleRadius(views.handleRadius(tmp))
     }
   }
-  renderer.render(scene, views.camera)
+  // In XR rendert three.js immer perspektivisch – die Kamera muss im Rig hängen.
+  renderer.render(scene, xr.isPresenting ? views.perspective : views.camera)
   frames += 1
   if (frames >= 3 && !loadingSharedState) api.ready = true
 })

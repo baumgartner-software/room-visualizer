@@ -1,5 +1,5 @@
 import { controllerHelpSvg, DESKTOP_CONTROLS } from './controllerHelp'
-import type { Editor } from './editor'
+import { TOOL_LABELS, type Editor, type Tool } from './editor'
 import { bounds } from './geometry'
 import type { Store } from './store'
 import type { ElementDef, PlacedElement, ProjectState } from './types'
@@ -68,14 +68,29 @@ export function setupUI(o: UIOptions): void {
       /* Speicher nicht verfügbar – Zustand gilt nur für diese Sitzung */
     }
   }
-  let helpOpen = true
+  // Standardmäßig eingeklappt – die Karte holt man sich über den Knopf dazu.
+  let helpOpen = false
   try {
-    helpOpen = localStorage.getItem('room-visualizer:help-open') !== '0'
+    helpOpen = localStorage.getItem('room-visualizer:help-open') === '1'
   } catch {
-    /* Standard: offen */
+    /* Standard: eingeklappt */
   }
   setHelpOpen(helpOpen)
   helpToggle.addEventListener('click', () => setHelpOpen(help.classList.contains('collapsed')))
+
+  // --- Werkzeuge -------------------------------------------------------------
+  const toolButtons = [...document.querySelectorAll<HTMLButtonElement>('button[data-tool]')]
+  for (const btn of toolButtons) {
+    btn.textContent = TOOL_LABELS[btn.dataset.tool as Tool]
+    btn.addEventListener('click', () => editor.setTool(btn.dataset.tool as Tool))
+  }
+  const renderTool = (tool: Tool): void => {
+    for (const b of toolButtons) b.classList.toggle('active', b.dataset.tool === tool)
+    document.body.classList.toggle('painting', tool === 'paint')
+    document.body.classList.toggle('viewing', tool === 'view')
+  }
+  editor.onToolChange = renderTool
+  renderTool(editor.tool)
 
   // --- Ansichten -------------------------------------------------------------
   const viewButtons = [...document.querySelectorAll<HTMLButtonElement>('button[data-view]')]
@@ -105,7 +120,6 @@ export function setupUI(o: UIOptions): void {
   // --- Farbpalette -----------------------------------------------------------
   const paletteEl = $('palette')
   const customColor = $<HTMLInputElement>('paint-color')
-  const paintToggle = $<HTMLButtonElement>('paint-toggle')
   const swatches = new Map<string, HTMLButtonElement>()
   for (const { color, name } of PALETTE) {
     const btn = document.createElement('button')
@@ -113,20 +127,18 @@ export function setupUI(o: UIOptions): void {
     btn.style.background = color
     btn.title = `${name} – als Pinselfarbe wählen`
     btn.setAttribute('aria-label', name)
-    btn.addEventListener('click', () => editor.setPaintColor(color))
+    btn.addEventListener('click', () => pickColor(color))
     swatches.set(color, btn)
     paletteEl.appendChild(btn)
   }
-  customColor.addEventListener('input', () => editor.setPaintColor(customColor.value))
-  paintToggle.addEventListener('click', () => {
-    editor.setPaintColor(editor.paintColor ? null : customColor.value)
-  })
-  editor.onPaintModeChange = (color) => {
-    paintToggle.textContent = color ? `Pinsel an (${color})` : 'Pinsel aus'
-    paintToggle.classList.toggle('active', !!color)
-    document.body.classList.toggle('painting', !!color)
+  customColor.addEventListener('input', () => pickColor(customColor.value))
+
+  /** Farbe wählen heißt gleichzeitig: auf das Werkzeug „Farbe“ wechseln. */
+  function pickColor(color: string): void {
+    editor.setPaintColor(color)
+    editor.setTool('paint')
+    customColor.value = color
     for (const [c, btn] of swatches) btn.classList.toggle('active', c === color)
-    if (color) customColor.value = color
   }
 
   // --- Katalog ---------------------------------------------------------------

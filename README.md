@@ -98,9 +98,17 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   Spülen-, Herdumbauschrank, Hängeschrank, Aufsatzschrank, Hochschrank,
   Kühlschrank), Arbeitsplatte, Kochinsel, Kochfeld, Spülbecken, Backofen,
   Dunstabzugshaube und Rückwand.
-- **Bearbeitungsmodus**: Am ausgewählten Element erscheinen sechs Griffkugeln
-  (rot = X, grün = Y, blau = Z). Kugel ziehen = Größe der Seite ändern, Element
-  ziehen = verschieben, dazu drehen, duplizieren, löschen.
+- **Werkzeuge**: *Ansicht* (nur umsehen und in XR umhergehen), *Bearbeiten*
+  (Objekte auswählen und ändern) und *Farbe* (Pinsel). Das aktive Werkzeug steht
+  in der Kopfzeile und in XR auf der Leiste unten rechts.
+- **Griffe am ausgewählten Element**: sechs Kugeln ziehen die jeweilige Seite
+  auf (rot = X, grün = Y, blau = Z), die Pfeile daneben verschieben entlang
+  genau einer Achse, die weiße Platte darüber verschiebt frei in der Ebene.
+  Dazu drehen, duplizieren, löschen.
+- **Hover-Rahmen**: Das Objekt unter dem Mauszeiger bzw. dem Controller-Strahl
+  bekommt einen gelben Rahmen – auch Wände und Boden im Werkzeug *Farbe*.
+- **Umgebung**: Rasenfläche und Himmelskuppel rund um das Haus, sichtbar durch
+  die Terrassentüren.
 - **Farbwerkzeug**: Farbe aus der Palette (oder eigene Farbe) wählen und
   Elemente, Wände oder den Boden per Klick einfärben – am Desktop und in VR.
 - **Ansichten**: 3D (Orbit), isometrisch, 2D-Grundriss – jederzeit umschaltbar.
@@ -108,11 +116,11 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
   Controller-Trigger = auswählen/ziehen/malen, Griff-Taste = Menü vor sich holen.
   Das VR-Menü hat vier Seiten: Raum · Elemente · Farbe · Auswahl.
 - **Steuerungs-Hilfe**: unten rechts im Fenster liegt eine ausklappbare Karte mit
-  einer Abbildung des Quest-3-Controllers und der Belegung von Trigger, Griff,
-  Stick und Tasten, dazu die Maus- und Tastaturbefehle. Da HTML in einer
-  laufenden Immersive-Sitzung nicht sichtbar ist, erscheint dieselbe Grafik dort
-  als Tafel unten rechts im Blickfeld (über das VR-Menü unter *Raum*
-  abschaltbar).
+  beiden Quest-3-Controllern und der Belegung je Werkzeug, dazu die Maus- und
+  Tastaturbefehle. Da HTML in einer laufenden Immersive-Sitzung nicht sichtbar
+  ist, gibt es dieselbe Grafik dort als Tafel im Blickfeld – einzublenden über
+  das VR-Menü (*Raum → Steuerung zeigen*). Immer sichtbar bleibt in XR nur eine
+  kleine Leiste unten rechts mit *☰ Menü* und dem aktiven Werkzeug.
 - **Teilbarer Link**: der komplette Zustand steckt komprimiert im URL-Fragment
   (`#s=…`) und wird bei jeder Änderung sofort aktualisiert. Der Link geht nie an
   einen Server. Im Panel gibt es ihn zum Kopieren, dazu ein Feld mit dem
@@ -124,8 +132,10 @@ schwarze Stangengriffe. Welche Seite eines Möbels die Front ist, steht als
 | | |
 | --- | --- |
 | Maus | Element anklicken = auswählen, ziehen = verschieben. Kugeln ziehen = Größe ändern. Rechte Maustaste = schwenken, Rad = Zoom. |
-| Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `P` Pinsel an/aus · `Esc` abwählen |
-| Quest 3 | Trigger = auswählen, ziehen, malen · Griff-Taste = Menü holen · Stick links/rechts = drehen · Stick hoch/runter = anheben/absenken · A/X = duplizieren · B/Y = löschen |
+| Tastatur | `R` drehen · `Entf` löschen · `E` Griffe an/aus · `V` Ansicht · `P` Farbe · `Esc` zurück zu *Bearbeiten* |
+| Quest 3 · immer | Trigger = auswählen und ziehen · Griff = Menü holen · Leiste unten rechts = Menü und Werkzeug |
+| Quest 3 · Bearbeiten | Linker Stick ↑↓ = Höhe, ←→ = 90° drehen · rechter Stick = in der Ebene schieben (aus deiner Sicht) · A/X = duplizieren · B/Y = löschen |
+| Quest 3 · Ansicht und Farbe | Linker Stick = gehen und seitlich treten · rechter Stick ←→ = um 45° umsehen |
 
 ### URL-Parameter
 
@@ -171,6 +181,7 @@ im Quest-Browser, `localhost` gilt als sicherer Kontext).
 | `src/ui.ts` | HTML-Seitenpanel inklusive Farbpalette und Teilen-Bereich |
 | `src/share.ts` | Zustand ⇄ komprimiertes URL-Fragment |
 | `src/controllerHelp.ts` | Controller-Legende als SVG – im Panel und als XR-Tafel |
+| `src/environment.ts` | Rasen und Himmel außerhalb des Hauses |
 | `scripts/screenshot.mjs` | Headless-Rendering für die README-Bilder |
 
 Alle Maße intern in **Metern**, die Oberfläche zeigt Zentimeter. Der
@@ -216,4 +227,5 @@ Der Commit trägt `[skip ci]` und löst deshalb keinen weiteren Lauf aus.
 - Bemaßung im 2D-Grundriss, Grundriss im Editor bearbeiten
 - Esszimmer und Wohnbereich möblieren, weitere Kataloge (Bad, Schlafzimmer)
 - Hand-Tracking und Greifen von Elementen direkt mit der Hand
+- Teleport als Alternative zur stufenlosen Fortbewegung
 - Materialien und Texturen (Holzmaserung, Stein) statt Volltonfarben
